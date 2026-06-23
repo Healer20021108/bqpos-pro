@@ -106,14 +106,18 @@ function renderTable(
 ): void {
   tbody.innerHTML = result.lines
     .map(
-      (l) => `<tr>
+      (l) => {
+        // 「多出」= 目前高於目標的真實餘量（規格 §8.5）；好換多換的部分另在清單／結論呈現。
+        const overTarget = Math.max(0, current[l.denom] - stockTargets[l.denom]);
+        return `<tr>
         <td>${l.denom}</td>
         <td>${current[l.denom]}</td>
         <td>${stockTargets[l.denom]}</td>
         <td>${l.exact || '－'}</td>
         <td>${l.exchange || '－'}</td>
-        <td>${l.extra || '－'}</td>
-      </tr>`,
+        <td>${overTarget || '－'}</td>
+      </tr>`;
+      },
     )
     .join('');
 }
