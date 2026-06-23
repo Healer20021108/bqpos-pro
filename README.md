@@ -28,17 +28,28 @@ node scripts/sync-agent-docs.mjs
 手機優先的單頁網頁工具，採 **Vite + TypeScript**，純前端、不需後端／登入／資料庫。
 採模組化架構：一個分頁殼層 + 多個獨立功能模組，方便持續新增功能。
 
+### 快速啟動（最簡單，含手機測試）
+
+**macOS 直接雙擊專案根目錄的 `start.command`**。它會自動安裝相依（首次）、啟動開發伺服器，並在終端機印出：
+
+- **Local**：電腦用網址（預設 http://localhost:5173 ）
+- **Network**：手機用網址（手機需與電腦連同一個 Wi-Fi）
+- **QR Code**：手機相機掃碼即可開啟
+
+要停止：在該終端機視窗按 `Ctrl + C`。
+（首次若被 macOS 攔「未識別的開發者」，到「系統設定 → 隱私權與安全性」按「仍要打開」，之後不再詢問。）
+
 ### 指令
 
 ```bash
 npm install      # 安裝相依（第一次）
-npm run dev      # 開發伺服器（會自動處理 TypeScript，並解決 file:// 打不開的問題）
+npm start        # 啟動開發伺服器（開放區網 + QR，手機可測）；= npm run dev
 npm run build    # 產生靜態檔到 dist/（部署用）
 npm run preview  # 本機預覽 build 後的結果
 npm test         # 跑核心演算法測試（vitest）
 ```
 
-開發時執行 `npm run dev`，用瀏覽器開啟它顯示的網址（預設 http://localhost:5173 ）。
+不雙擊 `start.command` 也可以，直接 `npm start`，用瀏覽器開它顯示的網址即可。
 
 ### 架構
 
