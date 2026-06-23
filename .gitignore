@@ -1,0 +1,23 @@
+# 相依套件
+node_modules/
+
+# 紀錄檔
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 環境變數
+.env
+.env.local
+.env.*.local
+
+# macOS 系統檔
+.DS_Store
+
+# 編輯器設定
+.vscode/
+.idea/
+
+# Claude Code 個人本地設定（不共享）
+.claude/settings.local.json

@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "sync:agents": "node scripts/sync-agent-docs.mjs"
+  }
+}
