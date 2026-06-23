@@ -1,7 +1,9 @@
-// 固定面額與規則表。唯一需求來源為 PROJECT_SPEC.md，本檔只把規格數字落成常數。
-// 若數字與 PROJECT_SPEC.md 衝突，一律以 PROJECT_SPEC.md 為準。
+// 固定面額與目標持有量。數字來源為 PROJECT_SPEC.md。
+//
+// 簡化版需求（使用者 2026-06-24 決定）：不分平日/假日、不分 POS 與預備金，
+// 只用「單一目標持有量」。目標 = 平日 POS 建議量 + 預備金硬標準。
 
-import type { Denomination, TodayMode } from './types';
+import type { Denomination } from './types';
 
 export const denominations: Denomination[] = [500, 100, 50, 10, 5, 1];
 
@@ -10,59 +12,14 @@ export function unitLabel(denom: Denomination): '張' | '個' {
   return denom === 500 || denom === 100 ? '張' : '個';
 }
 
-export interface PosRule {
-  safe: number;
-  recommended: number;
-}
-
-// POS 機軟規則：安全量 safe、建議量 recommended。
-export const posRules: Record<'weekday' | 'weekend', Record<Denomination, PosRule>> = {
-  weekday: {
-    500: { safe: 5, recommended: 6 },
-    100: { safe: 22, recommended: 25 },
-    50: { safe: 5, recommended: 6 },
-    10: { safe: 25, recommended: 30 },
-    5: { safe: 12, recommended: 16 },
-    1: { safe: 24, recommended: 30 },
-  },
-  weekend: {
-    500: { safe: 6, recommended: 8 },
-    100: { safe: 25, recommended: 30 },
-    50: { safe: 6, recommended: 8 },
-    10: { safe: 30, recommended: 40 },
-    5: { safe: 16, recommended: 20 },
-    1: { safe: 30, recommended: 40 },
-  },
+// 每個幣值該備到的總量 = 平日建議量 + 預備金硬標準。
+// 註解標出兩者的相加來源，方便對照 PROJECT_SPEC.md。
+export const stockTargets: Record<Denomination, number> = {
+  500: 16, // 平日建議 6 + 預備金 10
+  100: 50, // 25 + 25
+  50: 26, // 6 + 20
+  10: 130, // 30 + 100
+  5: 76, // 16 + 60
+  1: 230, // 30 + 200
 };
-
-// 完整整理模式採用的 POS 目標規則表。
-// 規格 9.3／13.3 未明指採平日或假日數字，這裡選用平日（標準日常配置）作為基準，
-// 因為「完整整理」目的是回到日常標準，而非為高客流日預備。改這一個常數即可切換。
-export const fullModeRuleSet: 'weekday' | 'weekend' = 'weekday';
-
-// 預備金硬規則：補完 POS 後必須回到的固定數量。合計 10,000 元。
-export const reserveTargets: Record<Denomination, number> = {
-  500: 10,
-  100: 25,
-  50: 20,
-  10: 100,
-  5: 60,
-  1: 200,
-};
-
-// 好換模式的進位單位（數量，不是金額）。
-export const roundUnits: Record<Denomination, number> = {
-  500: 2,
-  100: 5,
-  50: 10,
-  10: 50,
-  5: 20,
-  1: 50,
-};
-
-// 取得指定今日模式對應的 POS 規則表。
-export function ruleSetFor(mode: TodayMode): Record<Denomination, PosRule> {
-  if (mode === 'weekend') return posRules.weekend;
-  if (mode === 'full') return posRules[fullModeRuleSet];
-  return posRules.weekday;
-}
+// 合計：16×500 + 50×100 + 26×50 + 130×10 + 76×5 + 230×1 = NT$16,210。

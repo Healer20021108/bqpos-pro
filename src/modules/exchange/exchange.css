@@ -1,5 +1,11 @@
 /* 換錢模組專屬樣式（通用元件如 .card/.seg/.result-list 放在 base.css 供各模組共用）。 */
 
+.hint {
+  margin: -2px 0 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 /* 面額輸入列 */
 .denoms {
   display: grid;
