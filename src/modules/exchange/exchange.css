@@ -1,0 +1,98 @@
+/* 換錢模組專屬樣式（通用元件如 .card/.seg/.result-list 放在 base.css 供各模組共用）。 */
+
+/* 面額輸入列 */
+.denoms {
+  display: grid;
+  gap: 8px;
+}
+
+.denom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.denom-name {
+  font-size: 0.98rem;
+}
+
+.denom-name small {
+  color: var(--muted);
+}
+
+.denom-row input[type='number'] {
+  width: 110px;
+  padding: 10px 12px;
+  font-size: 1.1rem;
+  text-align: right;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.denom-row input[type='number']:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+/* 今日結論 */
+.conclusion {
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.conclusion.ok {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+
+.conclusion.need {
+  background: var(--need-bg);
+  color: var(--need-ink);
+}
+
+/* 明細表：窄螢幕可橫向捲動 */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table.detail {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 460px;
+}
+
+table.detail th,
+table.detail td {
+  padding: 8px 6px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+table.detail th {
+  color: var(--muted);
+  font-weight: 600;
+  background: #fafbfc;
+}
+
+table.detail td:first-child,
+table.detail th:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.unit-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+  margin: 4px 0 0;
+}

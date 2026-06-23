@@ -1,6 +1,11 @@
 # 相依套件
 node_modules/
 
+# build 產物與快取
+dist/
+*.tsbuildinfo
+.vite/
+
 # 紀錄檔
 *.log
 npm-debug.log*

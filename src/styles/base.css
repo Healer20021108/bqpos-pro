@@ -1,0 +1,141 @@
+/* 全域樣式：設計變數、重置、以及可被各模組共用的通用元件（card / 分段選擇 / 結果清單）。 */
+
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --ink: #1c2530;
+  --muted: #5b6675;
+  --line: #e2e6ec;
+  --accent: #1f6feb;
+  --ok-bg: #e7f6ec;
+  --ok-ink: #1a7f3c;
+  --mid-bg: #fff6e5;
+  --mid-ink: #8a5300;
+  --need-bg: #fdecec;
+  --need-ink: #b3261e;
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei',
+    'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+/* 通用卡片 */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.card h2 {
+  font-size: 1rem;
+  margin: 0 0 10px;
+}
+
+.card h2.mt {
+  margin-top: 16px;
+}
+
+/* 分段式選擇（radio 群組） */
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.seg label {
+  flex: 1 1 0;
+  min-width: 84px;
+  position: relative;
+  cursor: pointer;
+}
+
+.seg input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.seg span {
+  display: block;
+  text-align: center;
+  padding: 11px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.92rem;
+  background: #fafbfc;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.seg label:has(input:checked) span {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.seg label:has(input:focus-visible) span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 結果清單 */
+.result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.result-list li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  border-left: 4px solid var(--line);
+  background: #fafbfc;
+}
+
+.result-list li.state-ok {
+  border-left-color: var(--ok-ink);
+  background: var(--ok-bg);
+}
+
+.result-list li.state-mid {
+  border-left-color: var(--mid-ink);
+  background: var(--mid-bg);
+}
+
+.result-list li.state-need {
+  border-left-color: var(--need-ink);
+  background: var(--need-bg);
+}
+
+.result-list li.muted {
+  color: var(--muted);
+  background: #fafbfc;
+  border-left-color: var(--line);
+}
+
+.total {
+  margin: 12px 2px 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-align: right;
+}
