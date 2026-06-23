@@ -1,10 +1,10 @@
-// 換錢模組的 UI 層：讀「目前各幣值總數」→ 呼叫純函式 → 直接顯示「要換多少」。
+// 換錢模組的 UI 層：讀「目前各幣值總數」→ 呼叫純函式 → 顯示「好換」要換多少。
 // 不在此處放計算規則，所有計算都來自 calculate.ts。
 
 import { denominations, unitLabel, stockTargets } from '../../core/rules';
 import { formatNT } from '../../core/format';
 import type { Denomination } from '../../core/types';
-import { calculateAll, type CalculationResult } from './calculate';
+import { goodExchange, sanitizeCount, type GoodExchangeResult } from './calculate';
 import './exchange.css';
 
 const TEMPLATE = `
@@ -20,7 +20,7 @@ const TEMPLATE = `
   </section>
 
   <section class="card">
-    <h2>要換多少</h2>
+    <h2>要換多少（好換）</h2>
     <ul class="result-list" data-out="exchange-list"></ul>
     <p class="total" data-out="exchange-total"></p>
   </section>
@@ -30,14 +30,14 @@ const TEMPLATE = `
     <div class="table-scroll">
       <table class="detail">
         <thead>
-          <tr><th>面額</th><th>目前</th><th>目標</th><th>要換</th><th>多出</th></tr>
+          <tr><th>面額</th><th>目前</th><th>目標</th><th>精準缺</th><th>好換換</th><th>多出</th></tr>
         </thead>
         <tbody data-out="detail-body"></tbody>
       </table>
     </div>
   </section>
 
-  <p class="unit-note">單位：500／100 為「張」，50／10／5／1 為「個」。目標＝平日建議量＋預備金硬標準，合計約 NT$16,210。</p>
+  <p class="unit-note">單位：500／100 為「張」，50／10／5／1 為「個」。好換＝銅板補到 5 的倍數、總額進位到整千，付款全用千元鈔。</p>
 `;
 
 // ---- 讀寫輸入（皆以 container 為範圍） ----------------------------------
@@ -68,40 +68,50 @@ function readCounts(container: HTMLElement): Partial<Record<Denomination, string
 
 // ---- 渲染 ---------------------------------------------------------------
 
-function renderConclusion(el: HTMLElement, result: CalculationResult): void {
+function renderConclusion(el: HTMLElement, result: GoodExchangeResult): void {
   if (!result.needsExchange) {
     el.className = 'conclusion ok';
     el.textContent = '今日建議：不需要換錢，各幣值都已達標準量。';
     return;
   }
   el.className = 'conclusion need';
-  el.textContent = `今日建議：需要換錢 ${formatNT(result.totalAmount)}。`;
+  const extra = result.total - result.exactTotal;
+  let text = `今日建議：換 ${formatNT(result.total)}，付 ${result.thousandNotes} 張千元鈔。`;
+  text += `實際缺 ${formatNT(result.exactTotal)}`;
+  if (extra > 0) text += `，為湊整千多換的 ${formatNT(extra)} 留抽屜備用`;
+  text += '。';
+  el.textContent = text;
 }
 
-function renderExchangeList(listEl: HTMLElement, totalEl: HTMLElement, result: CalculationResult): void {
-  const items = result.lines.filter((l) => l.exchangeCount > 0);
+function renderExchangeList(listEl: HTMLElement, totalEl: HTMLElement, result: GoodExchangeResult): void {
+  const items = result.lines.filter((l) => l.exchange > 0);
   if (items.length === 0) {
     listEl.innerHTML = '<li class="muted">各幣值都已達標準量，不需要換錢。</li>';
     totalEl.textContent = '';
     return;
   }
   listEl.innerHTML = items
-    .map(
-      (l) =>
-        `<li class="state-need">${l.denom} 元 要換 ${l.exchangeCount} ${l.unit} = ${formatNT(l.amount)}</li>`,
-    )
+    .map((l) => {
+      const extraNote = l.extra > 0 ? `（含多換 ${l.extra}）` : '';
+      return `<li class="state-need">${l.denom} 元 換 ${l.exchange} ${l.unit} = ${formatNT(l.amount)}${extraNote}</li>`;
+    })
     .join('');
-  totalEl.textContent = `合計：${formatNT(result.totalAmount)}`;
+  totalEl.textContent = `合計：${formatNT(result.total)}（付 ${result.thousandNotes} 張千元）`;
 }
 
-function renderTable(tbody: HTMLElement, result: CalculationResult): void {
+function renderTable(
+  tbody: HTMLElement,
+  result: GoodExchangeResult,
+  current: Record<Denomination, number>,
+): void {
   tbody.innerHTML = result.lines
     .map(
       (l) => `<tr>
         <td>${l.denom}</td>
-        <td>${l.current}</td>
-        <td>${l.target}</td>
-        <td>${l.exchangeCount || '－'}</td>
+        <td>${current[l.denom]}</td>
+        <td>${stockTargets[l.denom]}</td>
+        <td>${l.exact || '－'}</td>
+        <td>${l.exchange || '－'}</td>
         <td>${l.extra || '－'}</td>
       </tr>`,
     )
@@ -110,7 +120,6 @@ function renderTable(tbody: HTMLElement, result: CalculationResult): void {
 
 /**
  * 把換錢工具畫進 container，並回傳卸載用的清理函式。
- * 監聽器掛在 container 上（事件委派），切換分頁時一併移除。
  */
 export function renderExchange(container: HTMLElement): () => void {
   container.innerHTML = TEMPLATE;
@@ -123,16 +132,18 @@ export function renderExchange(container: HTMLElement): () => void {
   const tableBodyEl = container.querySelector<HTMLElement>('[data-out="detail-body"]')!;
 
   function render(): void {
-    const result = calculateAll({ counts: readCounts(container) });
+    const counts = readCounts(container);
+    const result = goodExchange({ counts });
+    const current = {} as Record<Denomination, number>;
+    for (const d of denominations) current[d] = sanitizeCount(counts[d]);
     renderConclusion(conclusionEl, result);
     renderExchangeList(exchangeListEl, exchangeTotalEl, result);
-    renderTable(tableBodyEl, result);
+    renderTable(tableBodyEl, result, current);
   }
 
   const onInput = (e: Event): void => {
     const target = e.target;
     if (!(target instanceof HTMLInputElement)) return;
-    // 數量欄位只接受數字：濾掉小數點、負號等（規格不允許小數與負數）。
     if (target.dataset.count !== undefined) {
       const cleaned = target.value.replace(/\D/g, '');
       if (cleaned !== target.value) target.value = cleaned;
