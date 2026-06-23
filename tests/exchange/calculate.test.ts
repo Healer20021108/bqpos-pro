@@ -7,12 +7,15 @@ import {
   sanitizeCount,
 } from '../../src/modules/exchange/calculate';
 
-test('sanitizeCount：空白／非法視為 0，小數捨去，負數歸零', () => {
+test('sanitizeCount：空白／非法／負數／小數一律視為無效 → 0；合法非負整數原樣保留', () => {
   expect(sanitizeCount('')).toBe(0);
   expect(sanitizeCount(undefined)).toBe(0);
   expect(sanitizeCount('abc')).toBe(0);
   expect(sanitizeCount('-5')).toBe(0);
-  expect(sanitizeCount('3.7')).toBe(3);
+  expect(sanitizeCount('3.7')).toBe(0); // 規格不允許小數 → 視為無效，不可悄悄變成 3
+  expect(sanitizeCount(3.7)).toBe(0);
+  expect(sanitizeCount(0)).toBe(0);
+  expect(sanitizeCount('25')).toBe(25);
   expect(sanitizeCount(8)).toBe(8);
 });
 

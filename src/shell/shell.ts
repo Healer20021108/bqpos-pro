@@ -10,10 +10,10 @@ function idFromHash(): string {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
-export function createShell(root: HTMLElement, mods: FeatureModule[]): void {
+export function createShell(root: HTMLElement, mods: FeatureModule[]): () => void {
   if (mods.length === 0) {
     root.innerHTML = '<p class="shell-empty">尚未註冊任何功能模組。</p>';
-    return;
+    return () => {};
   }
 
   root.innerHTML = `
@@ -28,6 +28,10 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): void {
   const tabBar = root.querySelector<HTMLElement>('.tab-bar')!;
   const main = root.querySelector<HTMLElement>('#module-root')!;
 
+  // 用 AbortController 統一綁定全域／分頁監聽器，卸載時一次移除，避免重複初始化時洩漏。
+  const controller = new AbortController();
+  const { signal } = controller;
+
   const buttons = new Map<string, HTMLButtonElement>();
   for (const mod of mods) {
     const btn = document.createElement('button');
@@ -36,9 +40,13 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): void {
     btn.textContent = mod.title;
     btn.setAttribute('role', 'tab');
     btn.dataset.id = mod.id;
-    btn.addEventListener('click', () => {
-      location.hash = `#/${mod.id}`;
-    });
+    btn.addEventListener(
+      'click',
+      () => {
+        location.hash = `#/${mod.id}`;
+      },
+      { signal },
+    );
     tabBar.appendChild(btn);
     buttons.set(mod.id, btn);
   }
@@ -69,10 +77,14 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): void {
     main.scrollTop = 0;
   }
 
-  window.addEventListener('hashchange', () => {
-    const id = idFromHash();
-    activate(id && buttons.has(id) ? id : mods[0].id);
-  });
+  window.addEventListener(
+    'hashchange',
+    () => {
+      const id = idFromHash();
+      activate(id && buttons.has(id) ? id : mods[0].id);
+    },
+    { signal },
+  );
 
   // 初始進入：有合法 hash 就用它，否則正規化成第一個模組（用 replaceState 不產生多餘的歷史紀錄）。
   const initial = idFromHash();
@@ -82,4 +94,12 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): void {
     history.replaceState(null, '', `#/${mods[0].id}`);
     activate(mods[0].id);
   }
+
+  // 殼層卸載：移除所有監聽器並卸載目前模組。
+  return () => {
+    controller.abort();
+    cleanup?.();
+    cleanup = undefined;
+    root.innerHTML = '';
+  };
 }

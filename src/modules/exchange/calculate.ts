@@ -18,13 +18,15 @@ import {
 } from '../../core/rules';
 
 /**
- * 將輸入值正規化為合法數量：
- * 空白／非數字／負數視為 0，小數無條件捨去。
+ * 將輸入值正規化為合法數量。
+ * 規格（PROJECT_SPEC.md §14）：空白視為 0，且不允許負數與小數。
+ * 因此空白／非數字／負數／小數一律視為無效，回傳 0（不做四捨五入或捨去，
+ * 避免把 3.7 這種輸入錯誤悄悄變成一個看似合理的數量）。
  */
 export function sanitizeCount(raw: unknown): number {
   const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.floor(n);
+  if (!Number.isInteger(n) || n < 0) return 0;
+  return n;
 }
 
 /**

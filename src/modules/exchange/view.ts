@@ -96,7 +96,7 @@ function buildInputs(wrap: HTMLElement, prefix: 'pos' | 'reserve'): void {
       return `
         <label class="denom-row">
           <span class="denom-name">${d} 元 <small>（${u}）</small></span>
-          <input type="number" inputmode="numeric" min="0" step="1"
+          <input type="text" inputmode="numeric" pattern="[0-9]*"
                  data-${prefix}="${d}" placeholder="0" aria-label="${d} 元目前數量" />
         </label>`;
     })
@@ -286,7 +286,14 @@ export function renderExchange(container: HTMLElement): () => void {
   }
 
   const onInput = (e: Event): void => {
-    if ((e.target as HTMLElement).matches('input')) render();
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    // 數量欄位只接受數字：濾掉小數點、負號等（規格不允許小數與負數）。
+    if (target.dataset.pos !== undefined || target.dataset.reserve !== undefined) {
+      const cleaned = target.value.replace(/\D/g, '');
+      if (cleaned !== target.value) target.value = cleaned;
+    }
+    render();
   };
   const onChange = (e: Event): void => {
     if ((e.target as HTMLElement).matches('input[name="mode"], input[name="exchange"]')) render();
