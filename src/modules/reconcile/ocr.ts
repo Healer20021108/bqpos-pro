@@ -29,6 +29,8 @@ interface LabelEntry {
 const LABEL_MAPS: Record<PosKind, LabelEntry[]> = {
   // 百貨POS —— 已用真實照片核對過。
   dept: [
+    // 銷售總金額不是付款方式，會被路由到「總帳」核對付款合計（見 view.ts handleOcrFiles）。
+    { key: 'sales_total', aliases: ['銷售總金額', '銷售總額'] },
     { key: 'cash_voucher', aliases: ['現金禮券'] },
     { key: 'e_cash_voucher', aliases: ['電子現金券'] },
     { key: 'cash', aliases: ['現金'] },

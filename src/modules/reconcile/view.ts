@@ -15,6 +15,9 @@ import type { Adjustment, PosKind, PosState, ReconcileResult } from './types';
 import './reconcile.css';
 
 const HISTORY_KEY = 'posHistoryManualV1';
+// OCR 抓到的「銷售總金額」存進 state.total（總帳），而非當成付款欄位寫進 state[pos]，
+// 否則會被算進「付款合計」造成重複。用這個保留 key 在 ocrWarn 裡標記總帳的 ⚠️。
+const TOTAL_OCR_KEY = 'sales_total';
 
 interface HistoryEntry {
   ts: string;
@@ -33,18 +36,22 @@ interface State {
   history: HistoryEntry[];
   showHistory: boolean;
   ocrWarn: Set<string>; // 由「信心不足／多張不一致」的 OCR 帶入的百貨POS欄位，列旁顯示 ⚠️
+  total: Record<PosKind, number | ''>; // 各POS的「總帳」（手動或 OCR 銷售總金額），用來核對付款合計
 }
 
 const TEMPLATE = `
   <div class="rc">
     <div class="navbar">
-      <div>
-        <div class="title">雙POS對帳</div>
-        <div class="sub">手動輸入 · 自動對帳</div>
+      <div class="navbar-top">
+        <div>
+          <div class="title">雙POS對帳</div>
+          <div class="sub">手動輸入 · 自動對帳</div>
+        </div>
+        <div class="nav-actions">
+          <button class="icon-btn" data-act="clear" title="清空">⌫</button>
+        </div>
       </div>
-      <div class="nav-actions">
-        <button class="icon-btn" data-act="clear" title="清空">⌫</button>
-      </div>
+      <div class="total-bar" data-out="totalBar"></div>
     </div>
 
     <div class="pos-tabs">
@@ -107,6 +114,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     history: loadHistory(),
     showHistory: false,
     ocrWarn: new Set<string>(),
+    total: { dept: '', company: '' },
   };
 
   const q = <T extends HTMLElement = HTMLElement>(sel: string): T =>
@@ -114,6 +122,7 @@ export function renderReconcile(container: HTMLElement): () => void {
 
   const els = {
     inputRows: q('[data-out="inputRows"]'),
+    totalBar: q('[data-out="totalBar"]'),
     ocrSection: q('[data-out="ocrSection"]'),
     ocrReviewArea: q('[data-out="ocrReviewArea"]'),
     chips: q('[data-out="chips"]'),
@@ -135,6 +144,9 @@ export function renderReconcile(container: HTMLElement): () => void {
   const num = (v: number): string => (v ? Number(v).toLocaleString() : '—');
   const countFilled = (obj: PosState): number =>
     Object.values(obj).filter((v) => v != null && v !== '' && v !== 0).length;
+  // 該POS所有付款方式的合計（含摺疊區的欄位；總帳另存 state.total，不在此計入）。
+  const sumAll = (pos: PosKind): number =>
+    Object.values(state[pos]).reduce((s: number, v) => s + (typeof v === 'number' ? v : 0), 0);
   // 「有填入」＝有大於 0 的金額。空白或 0 都視為未填入，會被收進摺疊區。
   const hasInput = (pos: PosKind, key: string): boolean => {
     const v = state[pos][key];
@@ -190,6 +202,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     state.history = [];
     state.enabled = { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false };
     state.ocrWarn.clear(); // 連同 ⚠️ 標記一起清掉
+    state.total = { dept: '', company: '' }; // 清掉總帳
     ocrRun++; // 作廢任何進行中的辨識
     els.ocrReviewArea.innerHTML = ''; // 清掉辨識結果摘要
     try {
@@ -409,6 +422,7 @@ export function renderReconcile(container: HTMLElement): () => void {
 
   function renderDynamic(): void {
     renderTabs();
+    renderTotalInfo(); // 付款合計／差距會隨欄位輸入即時更新（不重畫總帳輸入框，避免打斷打字）
     renderDiff();
     renderResults();
     renderHistory();
@@ -417,10 +431,78 @@ export function renderReconcile(container: HTMLElement): () => void {
   function render(): void {
     renderTabs();
     renderInputs();
+    renderTotalBar();
     renderChips();
     renderDiff();
     renderResults();
     renderHistory();
+  }
+
+  // ── 總帳核對（navbar），依分頁分流 ───────────────────────────────────────
+  // 百貨：input=手填／OCR銷售總金額（總帳）；info 顯示付款合計與差距。
+  // 公司：input=自動加總公司付款（唯讀）；info 比對百貨總帳（公司應等於百貨銷售總金額）。
+  function renderTotalBar(): void {
+    if (state.tab === 'dept') {
+      const warn = state.ocrWarn.has(TOTAL_OCR_KEY)
+        ? ' <span class="warn" title="辨識信心不足，請確認">⚠️</span>'
+        : '';
+      const totalVal = state.total.dept;
+      els.totalBar.innerHTML = `
+        <label class="total-input-wrap">
+          <span class="total-label">百貨總帳${warn}</span>
+          <input type="number" inputmode="numeric" placeholder="銷售總金額" data-total="dept" value="${totalVal === '' ? '' : totalVal}" />
+        </label>
+        <div class="total-info" data-out="totalInfo"></div>`;
+    } else {
+      // 公司合計唯讀、自動加總；值由 renderTotalInfo 填入（不放 data-total，避免被輸入監聽改寫）。
+      els.totalBar.innerHTML = `
+        <label class="total-input-wrap">
+          <span class="total-label">公司合計</span>
+          <input type="number" inputmode="numeric" placeholder="自動加總" readonly tabindex="-1" value="" />
+        </label>
+        <div class="total-info" data-out="totalInfo"></div>`;
+    }
+    renderTotalInfo();
+  }
+
+  function renderTotalInfo(): void {
+    const info = els.totalBar.querySelector('[data-out="totalInfo"]');
+    if (!info) return; // 還沒 renderTotalBar 過（首次 render 順序保證有）
+    if (state.tab === 'dept') {
+      const sub = sumAll('dept');
+      const total = state.total.dept;
+      const sumHtml = `<span class="total-sum">付款合計 NT$${sub.toLocaleString()}</span>`;
+      let diffHtml: string;
+      if (total === '') {
+        diffHtml = '<span class="total-hint">輸入總帳即可核對</span>';
+      } else {
+        const diff = total - sub;
+        if (diff === 0) diffHtml = '<span class="total-diff ok">✓ 與付款合計相符</span>';
+        else if (diff > 0)
+          diffHtml = `<span class="total-diff bad">付款方式還少 NT$${diff.toLocaleString()}（疑似漏填）</span>`;
+        else
+          diffHtml = `<span class="total-diff bad">付款方式多了 NT$${Math.abs(diff).toLocaleString()}（疑似多填）</span>`;
+      }
+      info.innerHTML = sumHtml + diffHtml;
+    } else {
+      // 公司：把自動加總填進唯讀 input；info 比對百貨總帳。
+      const compSum = sumAll('company');
+      const inputEl = els.totalBar.querySelector<HTMLInputElement>('input');
+      if (inputEl) inputEl.value = compSum ? String(compSum) : '';
+      const deptTotal = state.total.dept;
+      const refHtml = `<span class="total-sum">百貨總帳 ${deptTotal === '' ? '未填' : 'NT$' + deptTotal.toLocaleString()}</span>`;
+      let diffHtml: string;
+      if (deptTotal === '') {
+        diffHtml = '<span class="total-hint">填百貨總帳後核對</span>';
+      } else {
+        const diff = compSum - deptTotal;
+        if (diff === 0) diffHtml = '<span class="total-diff ok">✓ 與百貨總帳相符</span>';
+        else if (diff < 0)
+          diffHtml = `<span class="total-diff bad">公司比百貨總帳少 NT$${Math.abs(diff).toLocaleString()}</span>`;
+        else diffHtml = `<span class="total-diff bad">公司比百貨總帳多 NT$${diff.toLocaleString()}</span>`;
+      }
+      info.innerHTML = refHtml + diffHtml;
+    }
   }
 
   // ── OCR：拍照／選圖 → 立刻辨識 → 直接自動帶入表單（不需再按確認）──────────
@@ -438,14 +520,20 @@ export function renderReconcile(container: HTMLElement): () => void {
       let applied = 0;
       let warned = 0;
       matchedEntries.forEach(([key, r]) => {
-        // OCR 字典對齊百貨POS，固定寫入 'dept'。
-        // 經由 setVal 正規化為非負整數（與手動輸入同一條路徑），避免小數流入計算，
-        // 導致 findBestCombination 的 new Array(target+1) 擲出例外。
-        setVal('dept', key, String(r.value));
-        applied++;
+        const value = Math.max(0, Math.floor(Number(r.value) || 0)); // 與 setVal 同樣正規化為非負整數
         const lowConf = r.confidence < ocrConfig.confidenceWarningThreshold;
-        if (conflictKeys.has(key) || lowConf) {
-          state.ocrWarn.add(key); // 標 ⚠️ 提醒人工複核
+        const warnThis = conflictKeys.has(key) || lowConf;
+        if (key === TOTAL_OCR_KEY) {
+          // 銷售總金額 → 總帳（不寫進付款欄位，避免被算進付款合計造成重複）。
+          state.total.dept = value;
+        } else {
+          // OCR 字典對齊百貨POS，固定寫入 'dept'。經由 setVal 正規化為非負整數
+          // （與手動輸入同一條路徑），避免小數流入計算讓 findBestCombination 擲例外。
+          setVal('dept', key, String(value));
+        }
+        applied++;
+        if (warnThis) {
+          state.ocrWarn.add(key); // 標 ⚠️ 提醒人工複核（總帳用 TOTAL_OCR_KEY）
           warned++;
         } else {
           state.ocrWarn.delete(key); // 這次讀得很有把握 → 清掉舊的 ⚠️
@@ -471,17 +559,11 @@ export function renderReconcile(container: HTMLElement): () => void {
           .map((c) => `${escapeHtml(c.key)}：${c.values.map((v) => `第${v.source + 1}張=${v.value.toLocaleString()}`).join(' vs ')}`)
           .join('<br/>')}</div>`
       : '';
-    const unmatchedHtml = result.unmatched.length
-      ? `<div class="unmatched">未對應欄位（讀到了，但字典裡沒有，未帶入，僅供參考）：<br/>${result.unmatched
-          .map((u) => `${escapeHtml(u.label)}：${u.value.toLocaleString()}`)
-          .join('　')}</div>`
-      : '';
     const warnLine = warned ? `，其中 <b>${warned}</b> 項信心不足已標 ⚠️，請再確認` : '';
     els.ocrReviewArea.innerHTML = `
       <div class="ocr-review">
         <div class="title" style="color:var(--pos-up);">已自動帶入 ${applied} 項欄位 ✓${warnLine}</div>
         ${conflictHtml}
-        ${unmatchedHtml}
       </div>`;
   }
 
@@ -562,6 +644,24 @@ export function renderReconcile(container: HTMLElement): () => void {
         }
         render();
       }
+    },
+    { signal },
+  );
+
+  // 總帳輸入（委派於穩定的 totalBar 容器；只更新差距文字，不重畫輸入框以免打斷打字）。
+  els.totalBar.addEventListener(
+    'input',
+    (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || !t.dataset.total) return;
+      const pos = t.dataset.total as PosKind;
+      const v = t.value.trim();
+      state.total[pos] = v === '' ? '' : Math.max(0, parseInt(v, 10) || 0);
+      // 手動改過總帳＝已人工確認，清掉它的 ⚠️（僅百貨）並即時移除標記。
+      if (pos === 'dept' && state.ocrWarn.delete(TOTAL_OCR_KEY)) {
+        t.closest('.total-input-wrap')?.querySelector('.warn')?.remove();
+      }
+      renderTotalInfo();
     },
     { signal },
   );

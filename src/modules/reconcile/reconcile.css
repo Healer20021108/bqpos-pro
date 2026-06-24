@@ -38,9 +38,72 @@
 
 .rc .navbar {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 12px;
+}
+.rc .navbar-top {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px 0 12px;
+}
+.rc .total-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.rc .total-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rc .total-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.rc .total-input-wrap input[type='number'] {
+  width: 120px;
+}
+.rc .total-input-wrap input[readonly] {
+  background: var(--surface-2);
+  cursor: default;
+}
+.rc .total-input-wrap input[readonly]:focus {
+  border-color: var(--line);
+  box-shadow: none;
+}
+.rc .total-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-left: auto;
+  font-size: 12px;
+}
+.rc .total-sum {
+  color: var(--ink-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rc .total-diff {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rc .total-diff.ok {
+  color: var(--pos-up);
+}
+.rc .total-diff.bad {
+  color: var(--pos-down);
+}
+.rc .total-hint {
+  color: var(--ink-3);
 }
 .rc .navbar .title {
   font-size: 17px;
@@ -230,11 +293,6 @@
   padding: 8px;
   margin-top: 8px;
   font-size: 12px;
-}
-.rc .ocr-review .unmatched {
-  color: var(--ink-3);
-  font-size: 12px;
-  margin-top: 8px;
 }
 
 .rc .lbl {
