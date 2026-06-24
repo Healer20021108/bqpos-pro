@@ -9,11 +9,21 @@ import { PAYMENT_GROUPS, METHODS, NO_FORMULA_METHODS, NORMAL_PIECES, LAST_RESORT
 const DEPT_KEYS: ReadonlySet<string> = new Set(PAYMENT_GROUPS.dept.map((f) => f.key));
 const COMPANY_KEYS: ReadonlySet<string> = new Set(PAYMENT_GROUPS.company.map((f) => f.key));
 
-/** 把輸入狀態（可能含空字串）正規化為純數字快照。 */
+/**
+ * 把輸入狀態（可能含空字串）正規化為純數字快照。
+ * 一律夾成「非負整數」：空白/缺值→0、小數無條件捨去、負數歸 0、非數字→0。
+ * 這是計算層的最後防線：不論值從手動輸入或 OCR 哪條路來，進到對帳邏輯前都保證合法，
+ * 避免小數讓 findBestCombination 的 new Array(target+1) 出錯，或負數扭曲差異。
+ */
 export function toNumbers(state: Record<string, number | ''>): PosNumbers {
   const out: PosNumbers = {};
   for (const [k, v] of Object.entries(state)) {
-    out[k] = v === '' || v == null ? 0 : Number(v) || 0;
+    if (v === '' || v == null) {
+      out[k] = 0;
+      continue;
+    }
+    const n = Math.floor(Number(v));
+    out[k] = Number.isFinite(n) ? Math.max(0, n) : 0;
   }
   return out;
 }

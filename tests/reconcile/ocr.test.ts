@@ -71,3 +71,31 @@ test('mergeParsedResults：同欄位同值互相驗證、不同值列為衝突',
   expect(clash.conflicts).toHaveLength(1);
   expect(clash.conflicts[0].key).toBe('cash');
 });
+
+test('mergeParsedResults：3+ 張連拍衝突，完整列出每張各自讀到的值（不只兩兩比對）', () => {
+  const r = mergeParsedResults([
+    { matched: { cash: { value: 100, confidence: 0.9, rawText: '現金' } }, unmatched: [] },
+    { matched: { cash: { value: 200, confidence: 0.92, rawText: '現金' } }, unmatched: [] },
+    { matched: { cash: { value: 200, confidence: 0.88, rawText: '現金' } }, unmatched: [] },
+  ]);
+  expect(r.conflicts).toHaveLength(1); // 一個欄位、一筆衝突
+  // 完整列出三張各自的讀值與來源，而不是重複的兩兩比對
+  expect(r.conflicts[0].values).toEqual([
+    { value: 100, source: 0 },
+    { value: 200, source: 1 },
+    { value: 200, source: 2 },
+  ]);
+  expect(r.matched.cash.sources).toEqual([0, 1, 2]); // 來源涵蓋全部三張
+});
+
+test('mergeParsedResults：3 張全部一致 → 互相驗證、無衝突', () => {
+  const r = mergeParsedResults([
+    { matched: { cash: { value: 500, confidence: 0.8, rawText: '現金' } }, unmatched: [] },
+    { matched: { cash: { value: 500, confidence: 0.95, rawText: '現金' } }, unmatched: [] },
+    { matched: { cash: { value: 500, confidence: 0.9, rawText: '現金' } }, unmatched: [] },
+  ]);
+  expect(r.conflicts).toHaveLength(0);
+  expect(r.matched.cash.value).toBe(500);
+  expect(r.matched.cash.confidence).toBe(0.95); // 取最高信心
+  expect(r.matched.cash.sources).toEqual([0, 1, 2]);
+});

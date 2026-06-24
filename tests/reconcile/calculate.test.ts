@@ -10,9 +10,14 @@ import {
   syncDeptToCompany,
   calculateAdjustments,
 } from '../../src/modules/reconcile/calculate';
+import { PAYMENT_GROUPS } from '../../src/modules/reconcile/data';
 
 test('toNumbers：空字串／缺值正規化為 0，數字原樣保留', () => {
   expect(toNumbers({ a: '', b: 3, c: 0 })).toEqual({ a: 0, b: 3, c: 0 });
+});
+
+test('toNumbers：小數無條件捨去、負數歸 0（計算層最後防線）', () => {
+  expect(toNumbers({ a: 12.9, b: -5, c: 47, d: 0.4 })).toEqual({ a: 12, b: 0, c: 47, d: 0 });
 });
 
 test('findBestCombination：0→[]、負數→null、湊得出取最少張、湊不出→null', () => {
@@ -164,4 +169,68 @@ test('對帳：未配對項目走直接增減、不算組合（內容混雜無�
   expect(r.adjustments).toEqual([
     { kind: 'direct-add', from: '未配對項目', to: '未配對項目', amount: 400, combination: [], noFormula: true },
   ]);
+});
+
+test('對帳：一個需增加從兩個來源補足（多來源轉移，金額不漏不重）', () => {
+  // 現金 需 +100；悠遊卡多 60、街口支付多 40 → 現金分別從這兩處補滿。
+  const r = calculateAdjustments(
+    toNumbers({ cash: 100 }),
+    toNumbers({ easycard_card: 60, jkopay: 40 }),
+    [60, 65, 70, 75, 80, 85],
+  );
+  expect(r.differences).toEqual({ 現金: 100, 悠遊卡: -60, 街口支付: -40 });
+  const shape = r.adjustments.map((a) => ({ kind: a.kind, from: a.from, to: a.to, amount: a.amount }));
+  expect(shape).toEqual([
+    { kind: 'transfer', from: '悠遊卡', to: '現金', amount: 60 }, // 較接近 100，先取
+    { kind: 'transfer', from: '街口支付', to: '現金', amount: 40 },
+  ]);
+  // 每筆湊數組合金額必須剛好等於轉移金額（不漏不重）。
+  r.adjustments.forEach((a) => expect(a.combination.reduce((s, n) => s + n, 0)).toBe(a.amount));
+});
+
+test('對帳：多個等額來源時取 METHODS 較前者轉移，其餘列為需轉出（remove）', () => {
+  // 現金 需 +50；街口支付、悠遊卡 各多 50 → 等額配對取較前的街口支付，悠遊卡剩 50 轉出。
+  const r = calculateAdjustments(
+    toNumbers({ cash: 50 }),
+    toNumbers({ jkopay: 50, easycard_card: 50 }),
+    [],
+  );
+  expect(r.differences).toEqual({ 現金: 50, 街口支付: -50, 悠遊卡: -50 });
+  const shape = r.adjustments.map((a) => ({ kind: a.kind, from: a.from, to: a.to, amount: a.amount }));
+  expect(shape).toEqual([
+    { kind: 'transfer', from: '街口支付', to: '現金', amount: 50 },
+    { kind: 'remove', from: '悠遊卡', to: '需轉出或刪除', amount: 50 },
+  ]);
+});
+
+test('對帳：外送平台公司端較多 → 直接減少（direct-remove）', () => {
+  const r = calculateAdjustments(toNumbers({ foodpanda_pending: 300 }), toNumbers({ foodpanda: 500 }), []);
+  expect(r.differences).toEqual({ 'Food panda': -200 });
+  expect(r.adjustments).toEqual([
+    { kind: 'direct-remove', from: 'Food panda', to: 'Food panda', amount: 200, combination: [], noFormula: true },
+  ]);
+});
+
+test('欄位窮舉：每個宣告欄位最多只計入一個配對軸（逐欄位驗證，真正抓重複計算）', () => {
+  // 對每個欄位「單獨設 1、其餘為 0」：扣掉未配對項目後的配對軸總和必須 ≤ 1。
+  //   = 1 → 剛好落在一個配對軸；= 0 → 完全未配對。
+  //   ≥ 2 → 該欄位被多個配對軸重複計入（這正是要抓的 bug）。
+  // 並驗證 未配對項目 = 1 − 配對軸總和（未配對欄位才進未配對，且不為負）。
+  const explicitSum = (canon: Record<string, number>): number =>
+    Object.entries(canon)
+      .filter(([k]) => k !== '未配對項目')
+      .reduce((s, [, n]) => s + n, 0);
+
+  PAYMENT_GROUPS.dept.forEach((f) => {
+    const d = deptToCanonical(toNumbers({ [f.key]: 1 }));
+    const explicit = explicitSum(d);
+    expect(explicit).toBeLessThanOrEqual(1);
+    expect(d['未配對項目']).toBe(1 - explicit);
+  });
+  PAYMENT_GROUPS.company.forEach((f) => {
+    const c = companyToCanonical(toNumbers({ [f.key]: 1 }));
+    const explicit = explicitSum(c);
+    expect(explicit).toBeLessThanOrEqual(1);
+    expect(c['未配對項目']).toBe(1 - explicit);
+  });
 });

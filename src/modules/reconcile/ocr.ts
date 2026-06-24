@@ -415,6 +415,10 @@ export function parseLines(lines: CharInfo[][], labelMap: LabelEntry[]): ParsedR
 }
 
 // 合併多張照片的辨識結果，並偵測同欄位的數值衝突。
+// 先把每個欄位在「各張照片」讀到的值全部收集起來，再判斷：
+//   全部相同 → 互相驗證，記為 matched（sources 列出所有來源照片）。
+//   有不同值 → 列為衝突，values 完整列出每張照片各自讀到的值（支援連拍 3、4 張）。
+// matched 仍保留第一張的值，但 UI 會以 conflicts 把衝突欄位預設「不勾選」，避免誤套。
 export function mergeParsedResults(perFileResults: ParsedResult[]): MergedResult {
   const merged: MergedResult = {
     matched: {},
@@ -422,27 +426,26 @@ export function mergeParsedResults(perFileResults: ParsedResult[]): MergedResult
     conflicts: [],
     sourceCount: perFileResults.length,
   };
+  type Reading = { value: number; source: number; confidence: number; rawText: string };
+  const byKey: Record<string, Reading[]> = {};
   perFileResults.forEach(({ matched, unmatched }, i) => {
     Object.entries(matched).forEach(([key, record]) => {
-      const existing = merged.matched[key];
-      if (existing == null) {
-        merged.matched[key] = { ...record, sources: [i] };
-      } else if (existing.value === record.value) {
-        // 數值相同 → 多張照片互相驗證，記錄來源、信心值取較高者。
-        existing.sources.push(i);
-        existing.confidence = Math.max(existing.confidence, record.confidence);
-      } else {
-        // 同欄位不同數值 → 不猜，列成衝突讓人決定。
-        merged.conflicts.push({
-          key,
-          values: [
-            { value: existing.value, source: existing.sources[0] },
-            { value: record.value, source: i },
-          ],
-        });
-      }
+      (byKey[key] ??= []).push({ value: record.value, source: i, confidence: record.confidence, rawText: record.rawText });
     });
     unmatched.forEach((u) => merged.unmatched.push({ ...u, source: i }));
+  });
+  Object.entries(byKey).forEach(([key, readings]) => {
+    const first = readings[0];
+    merged.matched[key] = {
+      value: first.value,
+      confidence: Math.max(...readings.map((r) => r.confidence)),
+      rawText: first.rawText,
+      sources: readings.map((r) => r.source),
+    };
+    const distinct = new Set(readings.map((r) => r.value));
+    if (distinct.size > 1) {
+      merged.conflicts.push({ key, values: readings.map((r) => ({ value: r.value, source: r.source })) });
+    }
   });
   return merged;
 }
