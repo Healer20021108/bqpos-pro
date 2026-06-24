@@ -19,7 +19,7 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): () => voi
   root.innerHTML = `
     <div class="app-shell">
       <header class="app-header">
-        <h1>POS 換錢決策器</h1>
+        <h1>板橋KKPOS</h1>
       </header>
       <nav class="tab-bar" role="tablist" aria-label="功能分頁"></nav>
       <main class="app-main" id="module-root"></main>
