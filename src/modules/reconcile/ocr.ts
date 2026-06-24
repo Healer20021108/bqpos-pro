@@ -11,13 +11,17 @@
 import type { PosKind } from './types';
 
 // ── 設定 ──────────────────────────────────────────────────────────────────
+// 注意：這裡不再放 apiKey。正式環境一律走 serverless 代理（金鑰只在 server 端），
+// 本機開發才用 .env 的 VITE_VISION_API_KEY，且只在 import.meta.env.DEV 區塊內取用，
+// 正式 build 會把該區塊整段移除，金鑰不會進前端 bundle。詳見 fetchVisionResponse。
 const CONFIG = {
-  // 金鑰改由環境變數注入（.env 的 VITE_VISION_API_KEY），不再寫死在原始碼。
-  apiKey: import.meta.env.VITE_VISION_API_KEY ?? '',
   maxImageDimension: 1600,
   lineClusterTolerance: 0.6,
   confidenceWarningThreshold: 0.85,
 };
+
+// 正式環境辨識端點：自家 Netlify Function 代理（見 netlify/functions/ocr.mjs）。
+const OCR_PROXY_ENDPOINT = '/.netlify/functions/ocr';
 
 interface LabelEntry {
   key: string;
@@ -213,6 +217,11 @@ interface VisionPage {
 interface FullTextAnnotation {
   pages?: VisionPage[];
 }
+// Vision API responses[] 內單一結果（代理與直連都回傳這個結構）。
+interface VisionApiResult {
+  fullTextAnnotation?: FullTextAnnotation;
+  error?: { message: string };
+}
 
 // ── 影像前處理：縮圖 + 轉 base64 ────────────────────────────────────────────
 function resizeImageToBase64(file: File, maxDim: number): Promise<string> {
@@ -248,30 +257,53 @@ function resizeImageToBase64(file: File, maxDim: number): Promise<string> {
   });
 }
 
-// ── 呼叫 Google Cloud Vision API ────────────────────────────────────────────
-async function callVisionAPI(base64Image: string): Promise<FullTextAnnotation | null> {
-  if (!CONFIG.apiKey) {
-    throw new Error('尚未設定 Vision API 金鑰（請在 .env 設定 VITE_VISION_API_KEY）');
+// ── 取得 Vision 回應 ────────────────────────────────────────────────────────
+// 正式環境：把影像丟給 serverless 代理，由 server 端帶金鑰呼叫 Vision。
+// 本機開發（vite dev）：若 .env 有 VITE_VISION_API_KEY 就直接打 Vision，方便測試。
+//   下面 import.meta.env.DEV 區塊在正式 build 會被整段移除，金鑰不會出現在線上 bundle。
+async function fetchVisionResponse(base64Image: string): Promise<{ responses?: VisionApiResult[] }> {
+  if (import.meta.env.DEV) {
+    const devKey = import.meta.env.VITE_VISION_API_KEY;
+    if (devKey) {
+      const res = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${devKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: [
+            {
+              image: { content: base64Image },
+              features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+              imageContext: { languageHints: ['zh-Hant', 'en'] },
+            },
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error(`Vision API 連線失敗：HTTP ${res.status}`);
+      return res.json();
+    }
   }
-  const url = `https://vision.googleapis.com/v1/images:annotate?key=${CONFIG.apiKey}`;
-  const body = {
-    requests: [
-      {
-        image: { content: base64Image },
-        features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-        imageContext: { languageHints: ['zh-Hant', 'en'] },
-      },
-    ],
-  };
-  const res = await fetch(url, {
+  const res = await fetch(OCR_PROXY_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ image: base64Image }),
   });
-  if (!res.ok) throw new Error(`Vision API 連線失敗：HTTP ${res.status}`);
-  const data = await res.json();
+  if (!res.ok) {
+    let msg = `辨識服務連線失敗：HTTP ${res.status}`;
+    try {
+      const e = await res.json();
+      if (e?.error) msg = `辨識服務錯誤：${e.error}`;
+    } catch {
+      /* 解析失敗就用預設訊息 */
+    }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+async function callVisionAPI(base64Image: string): Promise<FullTextAnnotation | null> {
+  const data = await fetchVisionResponse(base64Image);
   const result = data.responses && data.responses[0];
-  if (!result) throw new Error('Vision API 沒有回傳結果');
+  if (!result) throw new Error('辨識服務沒有回傳結果');
   if (result.error) throw new Error(`Vision API 錯誤：${result.error.message}`);
   return result.fullTextAnnotation || null; // 沒偵測到文字時為 null，不算錯誤
 }
