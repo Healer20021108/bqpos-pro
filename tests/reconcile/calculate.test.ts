@@ -38,6 +38,21 @@ test('findCombination：常用湊不出時，逐步加入可選與最後手段',
   expect(findCombination(0, [42], [], [])).toEqual([]);
 });
 
+test('LinePay：百貨「連線(linepay)＋電子(linepay_electronic)」兩格 → 公司單一 Line Pay（2→1，非 bug）', () => {
+  const dept = toNumbers({ linepay: 3000, linepay_electronic: 1200 });
+  const company = toNumbers({ linepay: 4200 });
+  // 百貨兩格加總成一條 canonical「Line Pay」比對軸。
+  expect(deptToCanonical(dept)['Line Pay']).toBe(4200);
+  // 公司只有一格，直接對應。
+  expect(companyToCanonical(company)['Line Pay']).toBe(4200);
+  // 同步也把兩格加總後帶入公司單一欄位。
+  expect(syncDeptToCompany(dept).linepay).toBe(4200);
+  // 兩邊對齊 → 無差異、無調整。
+  const r = calculateAdjustments(dept, company, []);
+  expect(r.differences['Line Pay']).toBeUndefined();
+  expect(r.adjustments).toHaveLength(0);
+});
+
 test('deptToCanonical：依配對規則加總多個百貨欄位', () => {
   const d = deptToCanonical(
     toNumbers({ credit_card: 100, credit_card_offline: 30, gmpay: 5, gmpay_union: 2, gmpay_citi: 1, linepay: 8, linepay_electronic: 2 }),

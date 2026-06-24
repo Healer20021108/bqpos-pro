@@ -1,12 +1,12 @@
 // 用 Google Cloud Vision API（DOCUMENT_TEXT_DETECTION）辨識對帳表單照片，
-// 自動比對欄位標籤、擷取數值，並提供「人工複核後才套用」的安全機制。
+// 自動比對欄位標籤、擷取數值，辨識後直接自動帶入表單。
 // 邏輯逐項移植自原始 ocrFill.js（reference/dual-pos-original）。
 //
 // 設計重點：
 // 1. 解析完全不依賴特定欄位名稱 —— 把一列文字切成 [標籤][數字]…再比對字典。
-// 2. 支援一次多張照片並自動合併；同欄位不同數值會列成「衝突」讓人決定。
+// 2. 支援一次多張照片並自動合併；同欄位不同數值取「信心最高」者帶入，並記為衝突。
 // 3. 字典外的標籤不丟棄，放進「未對應」供日後擴充。
-// 4. 辨識結果一定要按「套用」才會寫入表單。
+// 4. 辨識結果直接自動帶入；低信心／多張不一致的欄位由 UI 標 ⚠️ 提醒人工複核。
 
 import type { PosKind } from './types';
 
@@ -417,8 +417,9 @@ export function parseLines(lines: CharInfo[][], labelMap: LabelEntry[]): ParsedR
 // 合併多張照片的辨識結果，並偵測同欄位的數值衝突。
 // 先把每個欄位在「各張照片」讀到的值全部收集起來，再判斷：
 //   全部相同 → 互相驗證，記為 matched（sources 列出所有來源照片）。
-//   有不同值 → 列為衝突，values 完整列出每張照片各自讀到的值（支援連拍 3、4 張）。
-// matched 仍保留第一張的值，但 UI 會以 conflicts 把衝突欄位預設「不勾選」，避免誤套。
+//   有不同值 → 列為衝突，values 完整列出每張照片各自讀到的值。
+// matched 取「信心最高」那張的值（自動帶入時就是最可信的猜測），衝突仍記進 conflicts，
+// UI 會把衝突／低信心欄位標 ⚠️ 提醒人工複核。
 export function mergeParsedResults(perFileResults: ParsedResult[]): MergedResult {
   const merged: MergedResult = {
     matched: {},
@@ -435,11 +436,12 @@ export function mergeParsedResults(perFileResults: ParsedResult[]): MergedResult
     unmatched.forEach((u) => merged.unmatched.push({ ...u, source: i }));
   });
   Object.entries(byKey).forEach(([key, readings]) => {
-    const first = readings[0];
+    // 取信心最高的那張作為代表值（自動帶入用最可信的猜測，而非剛好第一張）。
+    const best = readings.reduce((a, b) => (b.confidence > a.confidence ? b : a));
     merged.matched[key] = {
-      value: first.value,
-      confidence: Math.max(...readings.map((r) => r.confidence)),
-      rawText: first.rawText,
+      value: best.value,
+      confidence: best.confidence,
+      rawText: best.rawText,
       sources: readings.map((r) => r.source),
     };
     const distinct = new Set(readings.map((r) => r.value));

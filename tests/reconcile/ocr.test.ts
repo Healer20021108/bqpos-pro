@@ -99,3 +99,25 @@ test('mergeParsedResults：3 張全部一致 → 互相驗證、無衝突', () =
   expect(r.matched.cash.confidence).toBe(0.95); // 取最高信心
   expect(r.matched.cash.sources).toEqual([0, 1, 2]);
 });
+
+test('mergeParsedResults：衝突時 matched 取「信心最高」那張的值（供自動帶入用最可信的猜測）', () => {
+  const r = mergeParsedResults([
+    { matched: { cash: { value: 100, confidence: 0.7, rawText: '現金' } }, unmatched: [] },
+    { matched: { cash: { value: 250, confidence: 0.93, rawText: '現金' } }, unmatched: [] }, // 最高信心
+    { matched: { cash: { value: 100, confidence: 0.6, rawText: '現金' } }, unmatched: [] },
+  ]);
+  expect(r.conflicts).toHaveLength(1); // 仍記為衝突 → UI 會標 ⚠️
+  expect(r.matched.cash.value).toBe(250); // 自動帶入採用第 2 張（信心最高）
+  expect(r.matched.cash.confidence).toBe(0.93);
+});
+
+test('parseLines：百貨 LinePay 連線(LINEPay)與電子(LINE PAY(電子))不會互搶，各自歸位', () => {
+  // 字典順序仿真實 dept：較精確的「電子」別名排在「LINEPay」之前，靠 includes 比對。
+  const labelMap = [
+    { key: 'linepay_electronic', aliases: ['LINE PAY(電子)', 'LINE PAY(電', 'LINEPAY(電'] },
+    { key: 'linepay', aliases: ['LINEPay', 'Line Pay'] },
+  ];
+  const { matched } = parseLines([mkLine('LINE PAY(電子)1200'), mkLine('LINEPay3000')], labelMap);
+  expect(matched.linepay_electronic.value).toBe(1200); // 電子 → 電子
+  expect(matched.linepay.value).toBe(3000); // 連線 → 連線（不會被電子搶走）
+});

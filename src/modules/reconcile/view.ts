@@ -15,7 +15,6 @@ import type { Adjustment, PosKind, PosState, ReconcileResult } from './types';
 import './reconcile.css';
 
 const HISTORY_KEY = 'posHistoryManualV1';
-const MAX_PHOTOS = 4; // 連拍上限：百貨POS螢幕較長，分段拍最多 4 張一次辨識
 
 interface HistoryEntry {
   ts: string;
@@ -33,8 +32,7 @@ interface State {
   results: ReconcileResult | null;
   history: HistoryEntry[];
   showHistory: boolean;
-  photos: File[]; // 連拍待辨識的照片佇列
-  photoUrls: string[]; // 對應的縮圖預覽 objectURL（與 photos 同序）
+  ocrWarn: Set<string>; // 由「信心不足／多張不一致」的 OCR 帶入的百貨POS欄位，列旁顯示 ⚠️
 }
 
 const TEMPLATE = `
@@ -55,9 +53,8 @@ const TEMPLATE = `
     </div>
 
     <div class="ocr-section" data-out="ocrSection">
-      <input type="file" accept="image/*" capture="environment" multiple hidden data-act="ocrFile" />
-      <button class="btn btn-secondary" data-act="ocrAdd">📷 拍照（可連拍，最多 ${MAX_PHOTOS} 張）</button>
-      <div data-out="ocrQueue"></div>
+      <input type="file" accept="image/*" multiple hidden data-act="ocrFile" />
+      <button class="btn btn-secondary" data-act="ocrAdd">📷 拍照辨識（可一次選多張）</button>
       <div data-out="ocrReviewArea"></div>
     </div>
 
@@ -109,8 +106,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     results: null,
     history: loadHistory(),
     showHistory: false,
-    photos: [],
-    photoUrls: [],
+    ocrWarn: new Set<string>(),
   };
 
   const q = <T extends HTMLElement = HTMLElement>(sel: string): T =>
@@ -119,7 +115,6 @@ export function renderReconcile(container: HTMLElement): () => void {
   const els = {
     inputRows: q('[data-out="inputRows"]'),
     ocrSection: q('[data-out="ocrSection"]'),
-    ocrQueue: q('[data-out="ocrQueue"]'),
     ocrReviewArea: q('[data-out="ocrReviewArea"]'),
     chips: q('[data-out="chips"]'),
     diffTable: q('[data-out="diffTable"]'),
@@ -194,7 +189,9 @@ export function renderReconcile(container: HTMLElement): () => void {
     state.results = null;
     state.history = [];
     state.enabled = { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false };
-    clearPhotos(); // 連同連拍佇列與辨識結果一起清掉（含作廢進行中的辨識）
+    state.ocrWarn.clear(); // 連同 ⚠️ 標記一起清掉
+    ocrRun++; // 作廢任何進行中的辨識
+    els.ocrReviewArea.innerHTML = ''; // 清掉辨識結果摘要
     try {
       localStorage.removeItem(HISTORY_KEY);
     } catch {
@@ -243,11 +240,23 @@ export function renderReconcile(container: HTMLElement): () => void {
     // OCR／同步帶入後會在 render() 重新分組，照片抓到值的罕用欄位就會自動浮上來。
     const topFields = fields.filter((f) => f.active !== false || hasInput(pos, f.key));
     const hiddenFields = fields.filter((f) => f.active === false && !hasInput(pos, f.key));
-    const rowHtml = (f: (typeof fields)[number]): string => `
+    const rowHtml = (f: (typeof fields)[number]): string => {
+      const filled = state[pos][f.key] != null && state[pos][f.key] !== '';
+      // ⚠️ 只標在百貨POS：表示這格是 OCR 以「低信心／多張不一致」帶入的，請人工再確認一次。
+      const warn = pos === 'dept' && state.ocrWarn.has(f.key) ? ' <span class="warn" title="辨識信心不足，請確認">⚠️</span>' : '';
+      // 「刪除」鍵只在有值時出現，讓人一鍵清掉辨識錯誤的項目（清空＝視為 0）。
+      const delBtn = filled
+        ? `<button class="row-del" data-act="rowDel" data-pos="${pos}" data-key="${f.key}" title="清除這格">刪除</button>`
+        : '';
+      return `
       <div class="row">
-        <div class="lbl"><span class="glyph">${f.glyph}</span><span>${f.label}</span></div>
-        <input type="number" inputmode="numeric" placeholder="0" data-pos="${pos}" data-key="${f.key}" value="${val(pos, f.key)}" />
+        <div class="lbl"><span class="glyph">${f.glyph}</span><span>${f.label}${warn}</span></div>
+        <div class="cell">
+          ${delBtn}
+          <input type="number" inputmode="numeric" placeholder="0" data-pos="${pos}" data-key="${f.key}" value="${val(pos, f.key)}" />
+        </div>
       </div>`;
+    };
     let html = topFields.map(rowHtml).join('');
     if (hiddenFields.length) {
       html += `
@@ -412,159 +421,68 @@ export function renderReconcile(container: HTMLElement): () => void {
     renderDiff();
     renderResults();
     renderHistory();
-    renderOcrQueue();
   }
 
-  // ── 連拍佇列 ────────────────────────────────────────────────────────────
-  function addPhotos(files: File[]): void {
-    const room = MAX_PHOTOS - state.photos.length;
-    if (room <= 0) return;
-    files
-      .filter((f) => f.type.startsWith('image/'))
-      .slice(0, room)
-      .forEach((f) => {
-        state.photos.push(f);
-        state.photoUrls.push(URL.createObjectURL(f));
-      });
-    ocrRun++; // 作廢任何進行中的辨識
-    els.ocrReviewArea.innerHTML = ''; // 換了照片，舊的辨識結果先清掉
-    renderOcrQueue();
-  }
-
-  function removePhoto(idx: number): void {
-    if (idx < 0 || idx >= state.photos.length) return;
-    URL.revokeObjectURL(state.photoUrls[idx]);
-    state.photos.splice(idx, 1);
-    state.photoUrls.splice(idx, 1);
-    ocrRun++; // 佇列變動 → 作廢進行中的辨識
-    els.ocrReviewArea.innerHTML = ''; // 清掉可能對應舊佇列的辨識結果
-    renderOcrQueue();
-  }
-
-  function clearPhotos(): void {
-    state.photoUrls.forEach((u) => URL.revokeObjectURL(u));
-    state.photos = [];
-    state.photoUrls = [];
-    ocrRun++; // 作廢進行中的辨識
-    els.ocrReviewArea.innerHTML = ''; // 清掉辨識結果，避免清空後仍可按套用
-    renderOcrQueue();
-  }
-
-  function renderOcrQueue(): void {
-    const n = state.photos.length;
-    const addBtn = container.querySelector<HTMLButtonElement>('[data-act="ocrAdd"]');
-    if (addBtn) {
-      addBtn.disabled = n >= MAX_PHOTOS;
-      addBtn.textContent =
-        n >= MAX_PHOTOS ? `已拍滿 ${MAX_PHOTOS} 張` : `📷 拍照（可連拍，已 ${n}/${MAX_PHOTOS}）`;
-    }
-    if (!n) {
-      els.ocrQueue.innerHTML = '';
-      return;
-    }
-    const thumbs = state.photoUrls
-      .map(
-        (url, i) => `
-        <div class="ocr-thumb">
-          <img src="${url}" alt="第 ${i + 1} 張" />
-          <button class="ocr-thumb-x" data-act="ocrRemove" data-idx="${i}" title="移除">✕</button>
-        </div>`,
-      )
-      .join('');
-    els.ocrQueue.innerHTML = `
-      <div class="ocr-queue">
-        <div class="ocr-thumbs">${thumbs}</div>
-        <div class="ocr-queue-actions">
-          <button class="btn btn-primary" data-act="ocrRecognize">🔍 辨識這 ${n} 張並帶入</button>
-          <button class="icon-btn ghost" data-act="ocrClear" title="清除全部">⌫</button>
-        </div>
-      </div>`;
-  }
-
-  // ── OCR 複核面板（辨識結果一定要按「套用」才寫入表單）──────────────────
-  function renderReviewPanel(
-    target: HTMLElement,
-    result: MergedResult,
-    applyCallback: (fields: Record<string, number>) => void,
-  ): void {
-    const matchedEntries = Object.entries(result.matched);
-    // 多張照片數值不一致的欄位：預設「不勾選」，避免按套用就寫入一個用猜的值。
-    const conflictKeys = new Set(result.conflicts.map((c) => c.key));
-    const matchedRows = matchedEntries
-      .map(([key, r]) => {
-        const conflicted = conflictKeys.has(key);
-        const warn =
-          (conflicted ? ' ❗多張不一致' : '') +
-          (r.confidence < ocrConfig.confidenceWarningThreshold ? ' ⚠️' : '');
-        return `
-        <div class="field-row">
-          <input type="checkbox" data-key="${key}" ${conflicted ? '' : 'checked'} />
-          <span class="name">${escapeHtml(r.rawText)}${warn}</span>
-          <input type="number" data-value-for="${key}" value="${r.value}" />
-        </div>`;
-      })
-      .join('');
-
-    const conflictHtml = result.conflicts.length
-      ? `<div class="conflict">⚠️ 以下欄位在不同照片讀到不同數值，請自行確認後手動填入：<br/>${result.conflicts
-          .map((c) => `${c.key}：${c.values.map((v) => `第${v.source + 1}張=${v.value.toLocaleString()}`).join(' vs ')}`)
-          .join('<br/>')}</div>`
-      : '';
-
-    const unmatchedHtml = result.unmatched.length
-      ? `<div class="unmatched">未對應欄位（讀到了，但字典裡沒有，僅供參考）：<br/>${result.unmatched
-          .map((u) => `${escapeHtml(u.label)}：${u.value.toLocaleString()}`)
-          .join('　')}</div>`
-      : '';
-
-    target.innerHTML = `
-      <div class="ocr-review">
-        <div class="title">辨識結果複核（共 ${result.sourceCount} 張照片，抓到 ${matchedEntries.length} 項）</div>
-        ${matchedRows || '<div class="unmatched">沒有辨識到任何已知欄位</div>'}
-        ${conflictHtml}
-        ${unmatchedHtml}
-        ${matchedEntries.length ? '<button class="btn btn-primary apply-btn" data-act="ocrApply">套用到表單</button>' : ''}
-      </div>`;
-
-    const applyBtn = target.querySelector<HTMLButtonElement>('[data-act="ocrApply"]');
-    if (!applyBtn) return;
-    applyBtn.addEventListener(
-      'click',
-      () => {
-        const fields: Record<string, number> = {};
-        target.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((cb) => {
-          if (!cb.checked) return;
-          const key = cb.dataset.key!;
-          const valueInput = target.querySelector<HTMLInputElement>(`input[data-value-for="${key}"]`);
-          fields[key] = Number(valueInput?.value) || 0;
-        });
-        applyCallback(fields);
-        target.innerHTML = `<div class="ocr-review" style="color:var(--pos-up);">已套用 ${Object.keys(fields).length} 項欄位 ✓</div>`;
-      },
-      { signal },
-    );
-  }
-
+  // ── OCR：拍照／選圖 → 立刻辨識 → 直接自動帶入表單（不需再按確認）──────────
+  // 一次可選一張或多張；多張會自動合併、互相驗證。低信心或多張不一致的欄位會在
+  // 帶入後標 ⚠️（見 renderInputs），提醒人工複核，但不擋下自動帶入。
   async function handleOcrFiles(files: File[]): Promise<void> {
     if (!files.length) return;
-    const myRun = ++ocrRun; // 認領這次辨識的序號
+    const myRun = ++ocrRun; // 認領這次辨識的序號；卸載或又選了新照片就讓舊結果作廢
     els.ocrReviewArea.innerHTML = `<div class="ocr-review">辨識中，共 ${files.length} 張照片…</div>`;
     try {
       const result = await recognizeAndParse(files, 'dept');
-      if (unmounted || myRun !== ocrRun) return; // 已卸載或佇列已變動 → 這次結果作廢
-      renderReviewPanel(els.ocrReviewArea, result, (fields) => {
+      if (unmounted || myRun !== ocrRun) return; // 已卸載或又選了新照片 → 這次結果作廢
+      const conflictKeys = new Set(result.conflicts.map((c) => c.key));
+      const matchedEntries = Object.entries(result.matched);
+      let applied = 0;
+      let warned = 0;
+      matchedEntries.forEach(([key, r]) => {
         // OCR 字典對齊百貨POS，固定寫入 'dept'。
-        // 經由 setVal 正規化為非負整數（與手動輸入同一條路徑），避免小數值流入計算，
+        // 經由 setVal 正規化為非負整數（與手動輸入同一條路徑），避免小數流入計算，
         // 導致 findBestCombination 的 new Array(target+1) 擲出例外。
-        Object.entries(fields).forEach(([key, value]) => setVal('dept', key, String(value)));
-        clearPhotos(); // 已帶入表單，清掉連拍佇列
-        render();
+        setVal('dept', key, String(r.value));
+        applied++;
+        const lowConf = r.confidence < ocrConfig.confidenceWarningThreshold;
+        if (conflictKeys.has(key) || lowConf) {
+          state.ocrWarn.add(key); // 標 ⚠️ 提醒人工複核
+          warned++;
+        } else {
+          state.ocrWarn.delete(key); // 這次讀得很有把握 → 清掉舊的 ⚠️
+        }
       });
+      render(); // 重畫表單：帶入值、把抓到值的罕用欄位浮上來、低信心欄位標 ⚠️
+      renderOcrNotice(result, applied, warned);
     } catch (err) {
       if (unmounted || myRun !== ocrRun) return;
       const msg = err instanceof Error ? err.message : String(err);
       els.ocrReviewArea.innerHTML = `<div class="ocr-review" style="color:var(--pos-down);">辨識失敗：${escapeHtml(msg)}</div>`;
     }
+  }
+
+  // 辨識後的「結果摘要」：純提示，不是確認步驟（值已自動帶入表單）。
+  function renderOcrNotice(result: MergedResult, applied: number, warned: number): void {
+    if (!applied) {
+      els.ocrReviewArea.innerHTML = '<div class="ocr-review">這 ' + result.sourceCount + ' 張照片沒有辨識到任何已知欄位。</div>';
+      return;
+    }
+    const conflictHtml = result.conflicts.length
+      ? `<div class="conflict">⚠️ 以下欄位在不同照片讀到不同數值，已自動採用信心最高的一張，請務必確認：<br/>${result.conflicts
+          .map((c) => `${escapeHtml(c.key)}：${c.values.map((v) => `第${v.source + 1}張=${v.value.toLocaleString()}`).join(' vs ')}`)
+          .join('<br/>')}</div>`
+      : '';
+    const unmatchedHtml = result.unmatched.length
+      ? `<div class="unmatched">未對應欄位（讀到了，但字典裡沒有，未帶入，僅供參考）：<br/>${result.unmatched
+          .map((u) => `${escapeHtml(u.label)}：${u.value.toLocaleString()}`)
+          .join('　')}</div>`
+      : '';
+    const warnLine = warned ? `，其中 <b>${warned}</b> 項信心不足已標 ⚠️，請再確認` : '';
+    els.ocrReviewArea.innerHTML = `
+      <div class="ocr-review">
+        <div class="title" style="color:var(--pos-up);">已自動帶入 ${applied} 項欄位 ✓${warnLine}</div>
+        ${conflictHtml}
+        ${unmatchedHtml}
+      </div>`;
   }
 
   // ── 事件綁定（全部掛 signal，卸載時一次移除）────────────────────────────
@@ -583,7 +501,14 @@ export function renderReconcile(container: HTMLElement): () => void {
       if (!(t instanceof HTMLInputElement)) return;
       const pos = t.dataset.pos as PosKind | undefined;
       const key = t.dataset.key;
-      if (pos && key) setVal(pos, key, t.value);
+      if (pos && key) {
+        // ⚠️ 只屬於百貨POS；公司POS有同名 key（cash／linepay…），不可在公司端清掉百貨的 ⚠️。
+        if (pos === 'dept' && state.ocrWarn.delete(key)) {
+          // 手動改過＝已人工確認：即時移除這列的 ⚠️（不重畫整列、不打斷輸入）。
+          t.closest('.row')?.querySelector('.lbl .warn')?.remove();
+        }
+        setVal(pos, key, t.value);
+      }
     },
     { signal },
   );
@@ -619,10 +544,16 @@ export function renderReconcile(container: HTMLElement): () => void {
       else if (act === 'compute') compute();
       else if (act === 'export') exportText();
       else if (act === 'ocrAdd') els.fileInput.click();
-      else if (act === 'ocrRecognize') void handleOcrFiles(state.photos.slice());
-      else if (act === 'ocrClear') clearPhotos();
-      else if (act === 'ocrRemove') removePhoto(Number(actEl?.dataset.idx));
-      else if (act === 'clearHistory') {
+      else if (act === 'rowDel') {
+        // 一鍵清掉這格（辨識錯誤時用）：清空值、移除 ⚠️、重畫（罕用欄位會收回摺疊區）。
+        const pos = actEl?.dataset.pos as PosKind | undefined;
+        const key = actEl?.dataset.key;
+        if (pos && key) {
+          state[pos][key] = '';
+          if (pos === 'dept') state.ocrWarn.delete(key); // ⚠️ 只屬於百貨POS
+          render();
+        }
+      } else if (act === 'clearHistory') {
         state.history = [];
         try {
           localStorage.removeItem(HISTORY_KEY);
@@ -641,9 +572,9 @@ export function renderReconcile(container: HTMLElement): () => void {
       const input = e.target as HTMLInputElement;
       // 先把檔案取進穩定陣列，再清空 input.value。順序很重要：
       // input.files 是 live FileList，先設 value='' 會把它清空，handleOcrFiles 就收到 0 張。
-      const files = input.files ? Array.from(input.files) : [];
+      const files = (input.files ? Array.from(input.files) : []).filter((f) => f.type.startsWith('image/'));
       input.value = ''; // 清空，下次選同一張也能再次觸發 change
-      if (files.length) addPhotos(files); // 加進連拍佇列，等按「辨識」才一次分析
+      if (files.length) void handleOcrFiles(files); // 選好（單張或多張）立刻辨識並自動帶入
     },
     { signal },
   );
@@ -653,7 +584,6 @@ export function renderReconcile(container: HTMLElement): () => void {
   return () => {
     unmounted = true;
     controller.abort();
-    state.photoUrls.forEach((u) => URL.revokeObjectURL(u)); // 釋放縮圖記憶體
     container.innerHTML = '';
   };
 }
