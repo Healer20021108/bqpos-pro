@@ -1,0 +1,589 @@
+/* 雙POS對帳模組樣式。全部 scope 在 .rc 之下，設計變數也只宣告在 .rc，
+   不會覆蓋 base.css 的 :root 變數，因此不影響殼層與其他模組。
+   樣式移植自原始 index.html（reference/dual-pos-original），去掉外層 phone/viewport 框，
+   交由殼層的 .app-shell / .app-main 排版。 */
+
+.rc {
+  --bg: oklch(0.985 0.012 75);
+  --bg-2: oklch(0.965 0.018 70);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.014 75);
+  --line: oklch(0.9 0.012 70);
+  --line-2: oklch(0.85 0.015 70);
+  --ink: oklch(0.22 0.018 60);
+  --ink-2: oklch(0.42 0.018 60);
+  --ink-3: oklch(0.58 0.015 65);
+  --ink-4: oklch(0.72 0.012 70);
+  --accent: oklch(0.66 0.16 55);
+  --accent-ink: oklch(0.3 0.1 55);
+  --accent-soft: oklch(0.96 0.04 70);
+  --accent-line: oklch(0.86 0.08 65);
+  --pos-up: oklch(0.62 0.13 155);
+  --pos-up-soft: oklch(0.96 0.03 155);
+  --pos-down: oklch(0.58 0.16 25);
+  --pos-down-soft: oklch(0.96 0.035 25);
+  --radius-lg: 22px;
+  --shadow-card: 0 1px 0 oklch(1 0 0 / 0.6) inset, 0 1px 2px oklch(0.3 0.02 60 / 0.04),
+    0 8px 24px oklch(0.3 0.02 60 / 0.05);
+  --font-num: 17px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.rc .num,
+.rc input[type='number'] {
+  font-family: 'Inter', 'SF Pro Text', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.rc .navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0 12px;
+}
+.rc .navbar .title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.rc .navbar .sub {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+.rc .nav-actions {
+  display: flex;
+  gap: 6px;
+}
+.rc .icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  font-size: 16px;
+}
+.rc .icon-btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.rc .pos-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-bottom: 12px;
+}
+.rc .pos-tab {
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.rc .pos-tab[data-active='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px oklch(0.3 0.02 60 / 0.06), 0 1px 0 oklch(1 0 0 / 0.6) inset;
+  font-weight: 600;
+}
+.rc .pos-tab .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ink-4);
+}
+.rc .pos-tab[data-active='true'] .dot {
+  background: var(--accent);
+}
+
+.rc .inline-sync {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 14px 0;
+}
+.rc .inline-sync .btn {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  border-radius: 12px;
+  font-size: 14px;
+  white-space: normal;
+  line-height: 1.2;
+  padding: 0 10px;
+}
+
+.rc .rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rc .row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.rc .row + .row {
+  margin-top: 6px;
+}
+.rc .pending-group {
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px dashed var(--ink-4);
+  padding: 2px 10px;
+}
+.rc .pending-group summary {
+  cursor: pointer;
+  padding: 8px 2px;
+  font-size: 13px;
+  color: var(--ink-3);
+  list-style: none;
+}
+.rc .pending-group summary::-webkit-details-marker {
+  display: none;
+}
+.rc .pending-group summary::before {
+  content: '▸ ';
+}
+.rc .pending-group[open] summary::before {
+  content: '▾ ';
+}
+.rc .pending-group .rows-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.rc .ocr-section {
+  margin-bottom: 10px;
+}
+.rc .ocr-section[hidden] {
+  display: none;
+}
+.rc .ocr-section .btn {
+  width: 100%;
+}
+.rc .ocr-review {
+  border: 1px solid var(--ink-4);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 10px;
+  font-size: 13px;
+  background: var(--surface);
+}
+.rc .ocr-review .title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.rc .ocr-review .field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+.rc .ocr-review .field-row span.name {
+  flex: 1;
+  color: var(--ink-2);
+}
+.rc .ocr-review .field-row input[type='number'] {
+  width: 90px;
+  text-align: right;
+}
+.rc .ocr-review .conflict {
+  background: #fff3cd;
+  border-radius: 8px;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.rc .ocr-review .unmatched {
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-top: 8px;
+}
+.rc .ocr-review .apply-btn {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.rc .lbl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--ink);
+  font-size: 14px;
+}
+.rc .glyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.rc input[type='number'] {
+  width: 96px;
+  padding: 7px 10px;
+  text-align: right;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--ink);
+  font-size: var(--font-num);
+  font-weight: 500;
+  outline: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.rc input[type='number']::-webkit-outer-spin-button,
+.rc input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.rc input[type='number']:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.rc .sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+.rc .sec-head .h {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.rc .sec-head .count {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.rc .sec-head .meta {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.rc .card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 0;
+}
+.rc .product-card {
+  padding: 8px;
+}
+.rc .toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rc .toggle-row {
+  width: 100%;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  padding: 8px 10px 8px 12px;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.rc .toggle-row[data-on='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+.rc .toggle-text {
+  font-size: 14px;
+  font-weight: 600;
+}
+.rc .toggle-state {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.rc .toggle-row[data-on='true'] .toggle-state {
+  color: var(--accent-ink);
+}
+.rc .switch {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--line-2);
+  padding: 2px;
+  transition: background 0.15s;
+}
+.rc .switch span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px oklch(0.3 0.02 60 / 0.18);
+  transition: transform 0.15s;
+}
+.rc .toggle-row[data-on='true'] .switch {
+  background: var(--accent);
+}
+.rc .toggle-row[data-on='true'] .switch span {
+  transform: translateX(16px);
+}
+
+.rc .diff-table {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.rc .diff-head,
+.rc .diff-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+}
+.rc .diff-head {
+  padding: 10px 12px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.rc .diff-head span {
+  text-align: right;
+}
+.rc .diff-head span:first-child {
+  text-align: left;
+}
+.rc .diff-row {
+  padding: 10px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  row-gap: 4px;
+}
+.rc .diff-row[data-mismatch='true'] {
+  padding-bottom: 28px;
+  background: oklch(0.98 0.02 25);
+}
+.rc .diff-row:last-child {
+  border-bottom: 0;
+}
+.rc .diff-row .name {
+  font-weight: 500;
+}
+.rc .diff-row .v {
+  text-align: right;
+  font-family: 'Inter', system-ui;
+  font-weight: 600;
+}
+.rc .diff-row .v.muted {
+  color: var(--ink-4);
+  font-weight: 400;
+}
+.rc .diff-row[data-mismatch='true'] .v {
+  color: var(--pos-down);
+}
+.rc .diff-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+  background: oklch(0.94 0.05 25);
+  color: var(--pos-down);
+  position: absolute;
+  right: 12px;
+  bottom: 6px;
+}
+
+.rc .hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+  margin: 0;
+}
+.rc .match-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--pos-up-soft);
+  border: 1px solid oklch(0.88 0.05 155);
+  color: var(--pos-up);
+  margin: 12px 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.rc .adj-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 8px;
+}
+.rc .adj-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.rc .adj-head .icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--accent-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.rc .adj-head .from-to {
+  font-size: 13px;
+  color: var(--ink-2);
+  flex: 1;
+}
+.rc .adj-head .from-to b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rc .adj-head .amount {
+  font-family: 'Inter', system-ui;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.rc .adj-combo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+.rc .piece {
+  font-family: 'Inter', system-ui;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.rc .plus {
+  color: var(--ink-4);
+  font-size: 11px;
+  align-self: center;
+}
+
+.rc .hist-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.rc .hist-time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.rc .hist-line {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.rc .btn {
+  flex: 1;
+  height: 52px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.rc .btn-primary {
+  background: var(--ink);
+  color: var(--bg);
+}
+.rc .btn-secondary {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.rc .export-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+  padding: 6px;
+}
+.rc [hidden] {
+  display: none !important;
+}

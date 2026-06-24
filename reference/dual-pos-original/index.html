@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>雙POS對帳</title>
+  <style>
+    :root {
+      --bg: oklch(0.985 0.012 75);
+      --bg-2: oklch(0.965 0.018 70);
+      --surface: oklch(1 0 0);
+      --surface-2: oklch(0.975 0.014 75);
+      --line: oklch(0.90 0.012 70);
+      --line-2: oklch(0.85 0.015 70);
+      --ink: oklch(0.22 0.018 60);
+      --ink-2: oklch(0.42 0.018 60);
+      --ink-3: oklch(0.58 0.015 65);
+      --ink-4: oklch(0.72 0.012 70);
+      --accent: oklch(0.66 0.16 55);
+      --accent-ink: oklch(0.30 0.10 55);
+      --accent-soft: oklch(0.96 0.04 70);
+      --accent-line: oklch(0.86 0.08 65);
+      --pos-up: oklch(0.62 0.13 155);
+      --pos-up-soft: oklch(0.96 0.03 155);
+      --pos-down: oklch(0.58 0.16 25);
+      --pos-down-soft: oklch(0.96 0.035 25);
+      --radius-lg: 22px;
+      --shadow-card: 0 1px 0 oklch(1 0 0 / 0.6) inset, 0 1px 2px oklch(0.30 0.02 60 / 0.04), 0 8px 24px oklch(0.30 0.02 60 / 0.05);
+      --font-base: 15px;
+      --font-num: 17px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+      background: var(--bg-2);
+      color: var(--ink);
+      font-size: var(--font-base);
+      -webkit-font-smoothing: antialiased;
+    }
+    .num, input[type="number"] {
+      font-family: "Inter", "SF Pro Text", system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+    .viewport {
+      min-height: 100dvh;
+      width: 100%;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, oklch(0.96 0.03 70) 0%, transparent 70%), var(--bg-2);
+    }
+    .phone {
+      width: 100%;
+      min-height: 100dvh;
+      max-width: 960px;
+      margin: 0 auto;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(12px + env(safe-area-inset-top)) 18px 12px;
+      flex-shrink: 0;
+    }
+    .title { font-size: 17px; font-weight: 600; }
+    .sub { font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+    .nav-actions { display: flex; gap: 6px; }
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink-2);
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .icon-btn.ghost { border-color: transparent; background: transparent; }
+    .body {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 4px 16px 32px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line-2) transparent;
+    }
+    .pos-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 4px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      margin-bottom: 12px;
+    }
+    .pos-tab {
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--ink-3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .pos-tab[data-active="true"] {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 2px oklch(0.30 0.02 60 / 0.06), 0 1px 0 oklch(1 0 0 / 0.6) inset;
+      font-weight: 600;
+    }
+    .pos-tab .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--ink-4);
+    }
+    .pos-tab[data-active="true"] .dot { background: var(--accent); }
+    .sync-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px dashed var(--line-2);
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .sync-row .left { color: var(--ink-2); }
+    .sync-row button {
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 10px;
+      color: var(--ink);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .inline-sync {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 14px 0 14px;
+    }
+    .inline-sync .btn {
+      width: 100%;
+      min-width: 0;
+      height: 46px;
+      border-radius: 12px;
+      font-size: 14px;
+      white-space: normal;
+      line-height: 1.2;
+      padding: 0 10px;
+    }
+    .rows { display: flex; flex-direction: column; gap: 4px; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid transparent;
+    }
+    .row + .row { margin-top: 6px; }
+    .pending-group {
+      margin-top: 10px;
+      border-radius: 12px;
+      border: 1px dashed var(--ink-4);
+      padding: 2px 10px;
+    }
+    .pending-group summary {
+      cursor: pointer;
+      padding: 8px 2px;
+      font-size: 13px;
+      color: var(--ink-3);
+      list-style: none;
+    }
+    .pending-group summary::-webkit-details-marker { display: none; }
+    .pending-group summary::before { content: '▸ '; }
+    .pending-group[open] summary::before { content: '▾ '; }
+    .pending-group .rows-inner { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; }
+    .ocr-section { margin-bottom: 10px; }
+    .ocr-section[hidden] { display: none; }
+    #ocrBtn { width: 100%; }
+    .ocr-review {
+      border: 1px solid var(--ink-4);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .ocr-review .title { font-weight: 600; margin-bottom: 6px; }
+    .ocr-review .field-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+    .ocr-review .field-row span.name { flex: 1; color: var(--ink-2); }
+    .ocr-review .field-row input[type="number"] { width: 90px; text-align: right; }
+    .ocr-review .conflict { background: #fff3cd; border-radius: 8px; padding: 8px; margin-top: 8px; font-size: 12px; }
+    .ocr-review .unmatched { color: var(--ink-3); font-size: 12px; margin-top: 8px; }
+    .ocr-review .apply-btn { margin-top: 10px; width: 100%; }
+    .lbl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      color: var(--ink);
+      font-size: 14px;
+    }
+    .glyph {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-2);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+    .row input[type="number"] {
+      width: 96px;
+      padding: 7px 10px;
+      text-align: right;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg-2);
+      color: var(--ink);
+      font-size: var(--font-num);
+      font-weight: 500;
+      outline: none;
+      -moz-appearance: textfield;
+    }
+    .row input[type="number"]::-webkit-outer-spin-button,
+    .row input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .row input[type="number"]:focus {
+      border-color: var(--accent);
+      background: var(--surface);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .sec-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 18px 0 8px;
+    }
+    .sec-head .h { font-size: 13px; font-weight: 600; color: var(--ink); }
+    .sec-head .count { margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--ink-3); }
+    .sec-head .meta { font-size: 11px; color: var(--ink-3); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      box-shadow: var(--shadow-card);
+    }
+    .product-card { padding: 8px; }
+    .toggle-list { display: flex; flex-direction: column; gap: 6px; }
+    .toggle-row {
+      width: 100%;
+      min-height: 46px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-2);
+      color: var(--ink-2);
+      padding: 8px 10px 8px 12px;
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .toggle-row[data-on="true"] {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--accent-ink);
+    }
+    .toggle-text { font-size: 14px; font-weight: 600; }
+    .toggle-state { font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+    .toggle-row[data-on="true"] .toggle-state { color: var(--accent-ink); }
+    .switch {
+      width: 38px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--line-2);
+      padding: 2px;
+      transition: background .15s;
+    }
+    .switch span {
+      display: block;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 0 1px 2px oklch(0.3 0.02 60 / .18);
+      transition: transform .15s;
+    }
+    .toggle-row[data-on="true"] .switch { background: var(--accent); }
+    .toggle-row[data-on="true"] .switch span { transform: translateX(16px); }
+    .diff-table {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .diff-head, .diff-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      align-items: center;
+    }
+    .diff-head {
+      padding: 10px 12px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--line);
+      font-weight: 600;
+    }
+    .diff-head span { text-align: right; }
+    .diff-head span:first-child { text-align: left; }
+    .diff-row {
+      padding: 10px 12px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+      row-gap: 4px;
+    }
+    .diff-row[data-mismatch="true"] { padding-bottom: 28px; background: oklch(0.98 0.02 25); }
+    .diff-row:last-child { border-bottom: 0; }
+    .diff-row .name { font-weight: 500; }
+    .diff-row .v {
+      text-align: right;
+      font-family: "Inter", system-ui;
+      font-weight: 600;
+    }
+    .diff-row .v.muted { color: var(--ink-4); font-weight: 400; }
+    .diff-row[data-mismatch="true"] .v { color: var(--pos-down); }
+    .diff-chip {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 7px;
+      border-radius: 8px;
+      white-space: nowrap;
+      background: oklch(0.94 0.05 25);
+      color: var(--pos-down);
+      position: absolute;
+      right: 12px;
+      bottom: 6px;
+    }
+    .hint {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+    .match-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--pos-up-soft);
+      border: 1px solid oklch(0.88 0.05 155);
+      color: var(--pos-up);
+      margin: 12px 0;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .adj-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 8px;
+    }
+    .adj-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .adj-head .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--accent-ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .adj-head .from-to { font-size: 13px; color: var(--ink-2); flex: 1; }
+    .adj-head .from-to b { color: var(--ink); font-weight: 600; }
+    .adj-head .amount {
+      font-family: "Inter", system-ui;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+    .adj-combo {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--line);
+    }
+    .piece {
+      font-family: "Inter", system-ui;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--surface-2);
+      color: var(--ink-2);
+      border: 1px solid var(--line);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .plus { color: var(--ink-4); font-size: 11px; align-self: center; }
+    .hist-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .hist-time {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--ink-3);
+      margin-bottom: 6px;
+    }
+    .hist-line { font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+    .btn {
+      flex: 1;
+      height: 52px;
+      border-radius: 16px;
+      border: 1px solid transparent;
+      font: inherit;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary { background: var(--ink); color: var(--bg); }
+    .btn-secondary { background: var(--surface); border-color: var(--line); color: var(--ink); }
+    .export-btn {
+      border: 0;
+      background: transparent;
+      color: var(--ink-2);
+      font: inherit;
+      cursor: pointer;
+      padding: 6px;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="phone">
+      <div class="navbar">
+        <div>
+          <div class="title">雙POS對帳</div>
+          <div class="sub">手動輸入 · 自動對帳</div>
+        </div>
+        <div class="nav-actions">
+          <button class="icon-btn" id="clearBtn" title="清空">⌫</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="pos-tabs">
+          <button class="pos-tab" data-tab="dept" data-active="true"><span class="dot"></span>百貨POS<span id="deptCount"></span></button>
+          <button class="pos-tab" data-tab="company" data-active="false"><span class="dot"></span>公司POS<span id="companyCount"></span></button>
+        </div>
+        <div id="ocrSection" class="ocr-section">
+          <input type="file" id="ocrFileInput" accept="image/*" multiple hidden />
+          <button class="btn btn-secondary" id="ocrBtn">📷 拍照辨識帶入（可一次選多張）</button>
+          <div id="ocrReviewArea"></div>
+        </div>
+        <div class="rows" id="inputRows"></div>
+        <div class="inline-sync" id="inlineSync">
+          <button class="btn btn-secondary" id="syncBottomBtn">同步百貨POS金額</button>
+          <button class="btn btn-primary" id="computeBtn">計算調整建議</button>
+        </div>
+
+        <div class="sec-head">
+          <div class="h">即時對帳差異<span class="count">兩台POS逐項對齊</span></div>
+          <div class="meta" id="diffMeta" hidden>差異 <b id="diffCount">0</b> 項</div>
+        </div>
+        <div id="diffTable"></div>
+        <div id="resultsAnchor"></div>
+        <div id="results"></div>
+        <div id="history"></div>
+
+        <div class="sec-head">
+          <div class="h">產品金額設定<span class="count">用於組合差異金額</span></div>
+        </div>
+        <div class="card product-card">
+          <div class="toggle-list" id="chips"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 需要跟 ocrFill.js 放在同一個資料夾，純前端fetch呼叫Vision API需要 http:// 來源（不能直接雙擊file://開啟這個檔案測OCR，但純手動輸入測試不受影響） -->
+  <script src="ocrFill.js"></script>
+  <script>
+    const PAYMENT_GROUPS = {
+      // 百貨POS（Global Mall）—— 78 個欄位，順序對齊真實畫面由上到下的位置。
+      // active:false 代表目前在公司POS還沒有對應項目，UI上會收進「尚未配對」摺疊區，
+      // 但欄位本身還是存在，OCR辨識／手動輸入都正常運作，之後配對規則更新了再打開即可。
+      // key 命名對齊 ocrFill.js 的 LABEL_MAP，OCR「套用」可以直接寫入不用轉換層。
+      dept: [
+        { key: 'cash', label: '現金', glyph: '金' },
+        { key: 'credit_card', label: '連線信用卡', glyph: '卡' },
+        { key: 'credit_card_offline', label: '離線信用卡', glyph: '卡' },
+        { key: 'product_voucher', label: '商品禮券', glyph: '禮' },
+        { key: 'receivable_amount', label: '應收帳款', glyph: '收', active: false },
+        { key: 'product_substitute_voucher', label: '商代用券', glyph: '禮', active: false },
+        { key: 'bonus_offset', label: '紅利抵扣', glyph: '點', active: false },
+        { key: 'cash_voucher', label: '現金禮券', glyph: '禮' },
+        { key: 'cash_substitute_voucher', label: '現代用券', glyph: '禮', active: false },
+        { key: 'store_own_voucher', label: '專櫃自有券', glyph: '禮', active: false },
+        { key: 'member_discount_voucher', label: '會員折價券', glyph: '禮', active: false },
+        { key: 'imall_discount', label: 'Imall折抵', glyph: '折', active: false },
+        { key: 'balance_voucher', label: '餘額券', glyph: '禮', active: false },
+        { key: 'sodexo_product', label: '索迪斯商品', glyph: '禮', active: false },
+        { key: 'sodexo_substitute', label: '索迪斯代用', glyph: '禮', active: false },
+        { key: 'sodexo_balance', label: '索迪斯餘額', glyph: '禮', active: false },
+        { key: 'citi_direct_pay', label: '中信直接付', glyph: '付', active: false },
+        { key: 'citi_wechat', label: '中信微信', glyph: '付', active: false },
+        { key: 'app_discount_voucher', label: 'APP折價券', glyph: '折', active: false },
+        { key: 'citi_line', label: '中信LINE', glyph: '付', active: false },
+        { key: 'line_bonus', label: 'LINE紅利', glyph: '點', active: false },
+        { key: 'jkopay', label: '街口支付', glyph: '付' },
+        { key: 'jkopay_offset', label: '街口幣折抵', glyph: '折' },
+        { key: 'uupon_discount', label: 'UUPON折抵', glyph: '折', active: false },
+        { key: 'fb_voucher', label: 'FB折價券', glyph: '折', active: false },
+        { key: 'gift_voucher', label: '禮物券', glyph: '禮', active: false },
+        { key: 'gift_voucher_alt', label: '禮物券代用', glyph: '禮', active: false },
+        { key: 'gift_voucher_balance', label: '禮物券餘額', glyph: '禮', active: false },
+        { key: 'line_yikatong', label: 'LINE一卡通', glyph: '付', active: false },
+        { key: 'union_pay_cloud', label: '銀聯雲閃付', glyph: '付', active: false },
+        { key: 'union_pay_discount', label: '銀聯折抵', glyph: '折', active: false },
+        { key: 'pi_wallet', label: 'PI拍錢包', glyph: '錢' },
+        { key: 'linepay', label: 'LINEPay', glyph: '付' },
+        { key: 'ipass_money', label: '一卡通MONEY', glyph: '卡', active: false },
+        { key: 'gmpay', label: 'GMPay', glyph: '付' },
+        { key: 'e_product_gift', label: '電子商品禮', glyph: '禮', active: false },
+        { key: 'e_product_substitute', label: '電子商品代', glyph: '禮', active: false },
+        { key: 'easycard_pay', label: '悠遊付', glyph: '付' },
+        { key: 'ue_opened', label: '外送UE已開', glyph: '外', active: false },
+        { key: 'twpay', label: '台灣PAY', glyph: '付' },
+        { key: 'twpay_discount', label: '台灣PAY現折', glyph: '折', active: false },
+        { key: 'easycard_card', label: '悠遊卡', glyph: '卡' },
+        { key: 'takeout_self_pickup', label: '外帶自取', glyph: '外', active: false },
+        { key: 'orange_pay', label: '橘子支付', glyph: '付', active: false },
+        { key: 'stimulus_voucher', label: '振興券', glyph: '券', active: false },
+        { key: 'stimulus_voucher_substitute', label: '振興代用券', glyph: '券', active: false },
+        { key: 'sports_voucher', label: '動滋券', glyph: '券', active: false },
+        { key: 'jingcheng_discount', label: '精誠電子抵', glyph: '折' },
+        { key: 'foodpanda_pending', label: '外送熊貓未', glyph: '外' },
+        { key: 'e_cash_voucher', label: '電子現金券', glyph: '禮', active: false },
+        { key: 'e_gift_voucher', label: '電子禮物券', glyph: '禮', active: false },
+        { key: 'ipass_card', label: '一卡通', glyph: '卡', active: false },
+        { key: 'esun_wallet', label: '玉山Wallet', glyph: '付', active: false },
+        { key: 'ubereats_pending', label: '外送UE未開', glyph: '外' },
+        { key: 'receivable_5_ec', label: '應收五EC已', glyph: '收', active: false },
+        { key: 'receivable_1_live', label: '應收一直播', glyph: '收', active: false },
+        { key: 'panda_grocery', label: '熊貓雜貨外', glyph: '外', active: false },
+        { key: 'receivable_6', label: '應收六', glyph: '收', active: false },
+        { key: 'takeout_pending', label: '外帶未開', glyph: '外', active: false },
+        { key: 'local_voucher', label: '地方券', glyph: '券', active: false },
+        { key: 'full_pay', label: '全支付', glyph: '付' },
+        { key: 'entertainment_voucher', label: '娛樂券', glyph: '券', active: false },
+        { key: 'dining_voucher', label: '餐飲券', glyph: '券', active: false },
+        { key: 'instant_voucher', label: '即享券', glyph: '券', active: false },
+        { key: 'gmpay_union', label: 'GMPay(聯信)', glyph: '付' },
+        { key: 'points_payment', label: '點數付款', glyph: '點', active: false },
+        { key: 'pleasure_voucher', label: '享樂券', glyph: '券', active: false },
+        { key: 'receivable_7', label: '應收七', glyph: '收', active: false },
+        { key: 'fula_pay', label: 'fula', glyph: '付', active: false },
+        { key: 'icash_pay', label: 'iCashPay', glyph: '付', active: false },
+        { key: 'gmpay_citi', label: 'GMPAY(中信)', glyph: '付' },
+        { key: 'sui_mai_qing_song', label: '隨買輕鬆取', glyph: '付', active: false },
+        { key: 'linepay_electronic', label: 'LINE PAY(電', glyph: '付' },
+        { key: 'receivable_3', label: '應收三(補登', glyph: '收', active: false },
+        { key: 'ipass_money_app', label: 'iPass Money', glyph: '卡', active: false }, // 跟「一卡通MONEY」是畫面上兩個不同位置，實際業務差異不確定，先各自獨立記錄
+        { key: 'oupay', label: '歐付寶', glyph: '付', active: false },
+        { key: 'simple_pay', label: '簡單付', glyph: '付', active: false },
+        { key: 'full_ying_pay', label: '全盈+PAY', glyph: '付', active: false },
+      ],
+      // 公司POS —— 15 個欄位，數值來源是百貨POS對應項目加總後的結果（見 deptToCanonical）。
+      company: [
+        { key: 'cash', label: '現金', glyph: '金' },
+        { key: 'voucher', label: '禮券', glyph: '禮' },
+        { key: 'credit', label: '信用卡', glyph: '卡' },
+        { key: 'product_voucher', label: '商品禮券', glyph: '禮' },
+        { key: 'linepay', label: 'Line Pay', glyph: '付' },
+        { key: 'pi_wallet', label: 'PI電子錢包', glyph: '錢' },
+        { key: 'easycard_pay', label: '悠遊付', glyph: '付' },
+        { key: 'px_pay', label: 'PX-Pay', glyph: '付' },
+        { key: 'gmpay', label: 'GM Pay', glyph: '付' },
+        { key: 'jkopay', label: '街口支付', glyph: '付' },
+        { key: 'easycard_card', label: '悠遊卡', glyph: '卡' },
+        { key: 'twpay', label: '台灣Pay', glyph: '付' },
+        { key: 'jkopay_offset', label: '街口折抵', glyph: '折' },
+        { key: 'foodpanda', label: 'Food panda', glyph: '外' },
+        { key: 'ubereats', label: 'Ubereats', glyph: '外' },
+      ],
+    };
+
+    function findBestCombination(target, amounts) {
+      if (target <= 0) return target === 0 ? [] : null;
+      const dp = new Array(target + 1).fill(Infinity);
+      const parent = new Array(target + 1).fill(-1);
+      dp[0] = 0;
+      for (let i = 1; i <= target; i++) {
+        for (const amt of amounts) {
+          if (amt <= i && dp[i - amt] + 1 < dp[i]) {
+            dp[i] = dp[i - amt] + 1;
+            parent[i] = amt;
+          }
+        }
+      }
+      if (dp[target] === Infinity) return null;
+      const combo = [];
+      let cur = target;
+      while (cur > 0) { const a = parent[cur]; combo.push(a); cur -= a; }
+      return combo.sort((a, b) => b - a);
+    }
+    function findCombination(target, normal, optional, lastResort) {
+      if (target === 0) return [];
+      if (target < 0) return null;
+      let r = findBestCombination(target, normal); if (r) return r;
+      if (optional.length) { r = findBestCombination(target, [...normal, ...optional]); if (r) return r; }
+      return findBestCombination(target, [...normal, ...optional, ...lastResort]);
+    }
+    // 對帳比對的分類軸：直接採用公司POS的15個欄位名稱當作canonical分類
+    // （因為配對規則確認過，這15項剛好完整覆蓋兩邊POS共有的付款方式）。
+    const METHODS = ['現金', '禮券', '信用卡', '商品禮券', 'Line Pay', 'PI電子錢包', '悠遊付', 'PX-Pay', 'GM Pay', '街口支付', '悠遊卡', '台灣Pay', '街口折抵', 'Food panda', 'Ubereats'];
+    const NO_FORMULA_METHODS = new Set(['Food panda', 'Ubereats']);
+    // 依你提供的 16 條配對規則：百貨POS多個欄位加總，對應到公司POS的單一項目。
+    function deptToCanonical(dept) {
+      return {
+        '現金': dept.cash || 0,
+        '信用卡': (dept.credit_card || 0) + (dept.credit_card_offline || 0),
+        '商品禮券': (dept.product_voucher || 0) + (dept.cash_voucher || 0),
+        '街口支付': dept.jkopay || 0,
+        '街口折抵': dept.jkopay_offset || 0,
+        'PI電子錢包': dept.pi_wallet || 0,
+        'Line Pay': (dept.linepay || 0) + (dept.linepay_electronic || 0),
+        '悠遊付': dept.easycard_pay || 0,
+        '台灣Pay': dept.twpay || 0,
+        '悠遊卡': dept.easycard_card || 0,
+        '禮券': dept.jingcheng_discount || 0,
+        'Food panda': dept.foodpanda_pending || 0,
+        'Ubereats': dept.ubereats_pending || 0,
+        'PX-Pay': dept.full_pay || 0,
+        'GM Pay': (dept.gmpay || 0) + (dept.gmpay_union || 0) + (dept.gmpay_citi || 0),
+      };
+    }
+    // 公司POS的欄位本身就是canonical分類，這裡單純把 key 換成跟 METHODS 一致的中文名稱。
+    function companyToCanonical(c) {
+      return {
+        '現金': c.cash || 0,
+        '禮券': c.voucher || 0,
+        '信用卡': c.credit || 0,
+        '商品禮券': c.product_voucher || 0,
+        'Line Pay': c.linepay || 0,
+        'PI電子錢包': c.pi_wallet || 0,
+        '悠遊付': c.easycard_pay || 0,
+        'PX-Pay': c.px_pay || 0,
+        'GM Pay': c.gmpay || 0,
+        '街口支付': c.jkopay || 0,
+        '悠遊卡': c.easycard_card || 0,
+        '台灣Pay': c.twpay || 0,
+        '街口折抵': c.jkopay_offset || 0,
+        'Food panda': c.foodpanda || 0,
+        'Ubereats': c.ubereats || 0,
+      };
+    }
+    function calculateAdjustments(dept, company, enabledOptional) {
+      const d = deptToCanonical(dept);
+      const c = companyToCanonical(company);
+      const normal = [42, 47, 57];
+      const optional = enabledOptional.slice();
+      const lastResort = [1, 3, 5];
+      const diffs = {};
+      METHODS.forEach((m) => {
+        const diff = (d[m] || 0) - (c[m] || 0);
+        if (diff !== 0) diffs[m] = diff;
+      });
+      const directAdjustments = [];
+      const formulaDiffs = {};
+      Object.entries(diffs).forEach(([m, v]) => {
+        if (NO_FORMULA_METHODS.has(m)) {
+          directAdjustments.push({ kind: v > 0 ? 'direct-add' : 'direct-remove', from: m, to: m, amount: Math.abs(v), combination: [], noFormula: true });
+        } else {
+          formulaDiffs[m] = v;
+        }
+      });
+      const needIncrease = {}, needDecrease = {};
+      Object.entries(formulaDiffs).forEach(([m, v]) => {
+        if (v > 0) needIncrease[m] = v;
+        else needDecrease[m] = Math.abs(v);
+      });
+      const adjustments = [];
+      const procInc = new Set(), procDec = new Set();
+      Object.entries(needIncrease).forEach(([toM, amt]) => {
+        for (const [fromM, decAmt] of Object.entries(needDecrease)) {
+          if (procDec.has(fromM) || needDecrease[fromM] === 0) continue;
+          if (decAmt === amt) {
+            const combo = findCombination(amt, normal, optional, lastResort);
+            if (combo) {
+              adjustments.push({ kind: 'transfer', from: fromM, to: toM, amount: amt, combination: combo });
+              procInc.add(toM); procDec.add(fromM); needDecrease[fromM] = 0;
+              break;
+            }
+          }
+        }
+      });
+      Object.entries(needIncrease).forEach(([toM, amt]) => {
+        if (procInc.has(toM)) return;
+        let remaining = amt;
+        while (remaining > 0) {
+          let bestSrc = null, best = Infinity;
+          Object.entries(needDecrease).forEach(([fromM, decAmt]) => {
+            if (decAmt > 0 && !procDec.has(fromM)) {
+              const dist = Math.abs(decAmt - remaining);
+              if (dist < best) { best = dist; bestSrc = fromM; }
+            }
+          });
+          if (!bestSrc) break;
+          const avail = needDecrease[bestSrc];
+          const take = Math.min(avail, remaining);
+          const combo = findCombination(take, normal, optional, lastResort);
+          if (!combo) break;
+          adjustments.push({ kind: 'transfer', from: bestSrc, to: toM, amount: take, combination: combo });
+          needDecrease[bestSrc] -= take;
+          if (needDecrease[bestSrc] === 0) procDec.add(bestSrc);
+          remaining -= take;
+        }
+        if (remaining > 0) {
+          const remCombo = findCombination(remaining, normal, optional, lastResort);
+          if (remCombo) adjustments.push({ kind: 'charge', from: '補結帳', to: toM, amount: remaining, combination: remCombo });
+          else adjustments.push({ kind: 'warn', from: '無法配對', to: toM, amount: remaining, combination: [] });
+        }
+        procInc.add(toM);
+      });
+      Object.entries(needDecrease).forEach(([m, amt]) => {
+        if (amt > 0) {
+          const combo = findCombination(amt, normal, optional, lastResort);
+          if (combo) adjustments.push({ kind: 'remove', from: m, to: '需轉出或刪除', amount: amt, combination: combo });
+          else adjustments.push({ kind: 'warn', from: m, to: '需轉出或刪除', amount: amt, combination: [] });
+        }
+      });
+      return { adjustments: [...directAdjustments, ...adjustments], differences: diffs, dept: d, company: c };
+    }
+
+    const state = {
+      tab: 'dept',
+      dept: {},
+      company: {},
+      enabled: { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false },
+      results: null,
+      history: JSON.parse(localStorage.getItem('posHistoryManualV1') || '[]'),
+      showHistory: false,
+    };
+
+    const els = {
+      inputRows: document.getElementById('inputRows'),
+      ocrSection: document.getElementById('ocrSection'),
+      ocrReviewArea: document.getElementById('ocrReviewArea'),
+      inlineSync: document.getElementById('inlineSync'),
+      chips: document.getElementById('chips'),
+      diffTable: document.getElementById('diffTable'),
+      results: document.getElementById('results'),
+      history: document.getElementById('history'),
+      diffMeta: document.getElementById('diffMeta'),
+      diffCount: document.getElementById('diffCount'),
+      deptCount: document.getElementById('deptCount'),
+      companyCount: document.getElementById('companyCount'),
+    };
+
+    function val(pos, key) { return state[pos][key] ?? ''; }
+    function num(v) { return v ? Number(v).toLocaleString() : '—'; }
+    function countFilled(obj) { return Object.values(obj).filter((v) => v != null && v !== '' && v !== 0).length; }
+    function currentSet() { return state.tab === 'dept' ? state.dept : state.company; }
+    function setVal(pos, key, value) {
+      state[pos][key] = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0);
+      renderDynamic();
+    }
+    function syncDeptToCompany() {
+      const d = state.dept;
+      // 套用你提供的16條配對規則，把百貨POS數值加總、寫入公司POS對應欄位。
+      state.company = Object.fromEntries(Object.entries({
+        cash: d.cash,
+        voucher: d.jingcheng_discount,
+        credit: (d.credit_card || 0) + (d.credit_card_offline || 0),
+        product_voucher: (d.product_voucher || 0) + (d.cash_voucher || 0),
+        linepay: (d.linepay || 0) + (d.linepay_electronic || 0),
+        pi_wallet: d.pi_wallet,
+        easycard_pay: d.easycard_pay,
+        px_pay: d.full_pay,
+        gmpay: (d.gmpay || 0) + (d.gmpay_union || 0) + (d.gmpay_citi || 0),
+        jkopay: d.jkopay,
+        easycard_card: d.easycard_card,
+        twpay: d.twpay,
+        jkopay_offset: d.jkopay_offset,
+        foodpanda: d.foodpanda_pending,
+        ubereats: d.ubereats_pending,
+      }).filter(([, v]) => v != null && v !== ''));
+      state.tab = 'company';
+      render();
+    }
+    function compute() {
+      const enabled = Object.entries(state.enabled).filter(([, v]) => v).map(([k]) => parseInt(k, 10));
+      state.results = calculateAdjustments(state.dept, state.company, enabled);
+      const r = state.results;
+      if (r.adjustments.length > 0 || Object.keys(r.differences).length > 0) {
+        const entry = { ts: new Date().toLocaleString('zh-TW', { hour12: false }), dept: r.dept, company: r.company, adjustments: r.adjustments, differences: r.differences };
+        state.history = [entry, ...state.history].slice(0, 10);
+        localStorage.setItem('posHistoryManualV1', JSON.stringify(state.history));
+      }
+      render();
+      document.querySelector('#resultsAnchor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function clearAll() {
+      if (!confirm('清空所有輸入與歷史記錄？')) return;
+      state.dept = {};
+      state.company = {};
+      state.results = null;
+      state.history = [];
+      state.enabled = { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false };
+      localStorage.removeItem('posHistoryManualV1');
+      render();
+    }
+    function exportText() {
+      if (!state.results) return;
+      const r = state.results;
+      const lines = [`【對帳結果】${new Date().toLocaleString('zh-TW')}`, '—— 差異 ——'];
+      Object.entries(r.differences).forEach(([m, d]) => lines.push(`${m}: ${d > 0 ? '不足' : '多了'} ${Math.abs(d)} 元`));
+      lines.push('—— 調整建議 ——');
+      r.adjustments.forEach((a) => {
+        const combo = a.combination?.length ? `（${a.combination.join('+')}）` : '';
+        if (a.kind === 'transfer') lines.push(`${a.from} → ${a.to}：${a.amount}元${combo}`);
+        else if (a.kind === 'charge') lines.push(`${a.to} 補結帳 ${a.amount}元${combo}`);
+        else if (a.kind === 'remove') lines.push(`${a.from} 多 ${a.amount}元 → ${a.to}${combo}`);
+        else lines.push(`${a.from} ${a.amount}元 → ${a.to}`);
+      });
+      const text = lines.join('\n');
+      if (navigator.share) navigator.share({ text, title: 'POS對帳結果' }).catch(() => {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => alert('已複製到剪貼簿'));
+      else prompt('請複製以下內容：', text);
+    }
+    function renderTabs() {
+      document.querySelectorAll('.pos-tab').forEach((btn) => btn.dataset.active = String(btn.dataset.tab === state.tab));
+      els.deptCount.textContent = countFilled(state.dept) ? ` · ${countFilled(state.dept)}` : '';
+      els.companyCount.textContent = countFilled(state.company) ? ` · ${countFilled(state.company)}` : '';
+      // OCR字典目前只涵蓋百貨POS（公司POS沒有對應的拍照辨識字典），只在百貨POS分頁顯示
+      els.ocrSection.hidden = state.tab !== 'dept';
+    }
+    function renderInputs() {
+      const pos = state.tab;
+      const fields = PAYMENT_GROUPS[pos];
+      const activeFields = fields.filter((f) => f.active !== false);
+      const pendingFields = fields.filter((f) => f.active === false);
+      const rowHtml = (f) => `
+        <div class="row">
+          <div class="lbl"><span class="glyph">${f.glyph}</span><span>${f.label}</span></div>
+          <input type="number" inputmode="numeric" placeholder="0" data-pos="${pos}" data-key="${f.key}" value="${val(pos, f.key)}" />
+        </div>
+      `;
+      let html = activeFields.map(rowHtml).join('');
+      if (pendingFields.length) {
+        // 尚未對帳的欄位（在公司POS還沒有對應項目）摺疊起來，避免表單過長，
+        // 但仍然保留輸入欄位，OCR辨識／手動記錄都還抓得到這些數值。
+        html += `
+          <details class="pending-group">
+            <summary>其他欄位（尚未配對對帳，共 ${pendingFields.length} 項）</summary>
+            <div class="rows-inner">${pendingFields.map(rowHtml).join('')}</div>
+          </details>
+        `;
+      }
+      els.inputRows.innerHTML = html;
+      els.inputRows.querySelectorAll('input').forEach((input) => {
+        input.addEventListener('input', (e) => setVal(e.target.dataset.pos, e.target.dataset.key, e.target.value));
+      });
+    }
+    function renderChips() {
+      els.chips.innerHTML = [60, 65, 70, 75, 80, 85].map((n) => `
+        <button class="toggle-row optional" data-n="${n}" data-on="${state.enabled[n]}">
+          <span class="toggle-text">${n} 元品項</span>
+          <span class="toggle-state">${state.enabled[n] ? '啟用中' : '未啟用'}</span>
+          <span class="switch" aria-hidden="true"><span></span></span>
+        </button>
+      `).join('');
+      els.chips.querySelectorAll('.optional').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const n = Number(btn.dataset.n);
+          state.enabled[n] = !state.enabled[n];
+          render();
+        });
+      });
+    }
+    function renderDiff() {
+      const d = deptToCanonical(state.dept);
+      const c = companyToCanonical(state.company);
+      const rows = METHODS.map((m) => {
+        const dv = d[m] || 0, cv = c[m] || 0;
+        return { m, dv, cv, diff: dv - cv, has: dv > 0 || cv > 0 };
+      }).filter((r) => r.has);
+      if (!rows.length) {
+        els.diffTable.innerHTML = '<div class="hint">輸入後，這裡會顯示百貨／公司逐項差異對照。</div>';
+        return;
+      }
+      els.diffTable.innerHTML = `
+        <div class="diff-table">
+          <div class="diff-head"><span>付款方式</span><span>百貨</span><span>公司</span></div>
+          ${rows.map((r) => `
+            <div class="diff-row" data-mismatch="${r.diff !== 0}">
+              <span class="name">${r.m}</span>
+              <span class="v ${r.dv ? '' : 'muted'}">${num(r.dv)}</span>
+              <span class="v ${r.cv ? '' : 'muted'}">${num(r.cv)}</span>
+              ${r.diff !== 0 ? `<span class="diff-chip">${r.diff > 0 ? `公司少 ${r.diff}` : `公司多 ${Math.abs(r.diff)}`}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+    function renderResults() {
+      const r = state.results;
+      els.diffMeta.hidden = !r;
+      els.diffCount.textContent = r ? Object.keys(r.differences).length : 0;
+      if (!r) { els.results.innerHTML = ''; return; }
+      if (r.adjustments.length === 0 && Object.keys(r.differences).length === 0) {
+        els.results.innerHTML = '<div class="match-banner">兩台POS金額完全相符，無需調整。</div>';
+        return;
+      }
+      if (!r.adjustments.length) { els.results.innerHTML = ''; return; }
+      els.results.innerHTML = `
+        <div class="sec-head">
+          <div class="h">調整建議<span class="count">公司帳調整方案</span></div>
+          <button class="export-btn" id="exportBtn">匯出</button>
+        </div>
+        ${r.adjustments.map(adjustmentHtml).join('')}
+      `;
+      document.getElementById('exportBtn')?.addEventListener('click', exportText);
+    }
+    function adjustmentHtml(a) {
+      let icon = '↔', fromTo = '';
+      if (a.kind === 'transfer') { icon = '↔'; fromTo = `<b>${a.from}</b> → <b>${a.to}</b>`; }
+      else if (a.kind === 'charge') { icon = '卡'; fromTo = `${a.to} <span style="color:var(--pos-down)">補結帳</span>`; }
+      else if (a.kind === 'remove') { icon = '×'; fromTo = `<b>${a.from}</b> 多餘金額 → 轉出或刪除`; }
+      else { icon = '!'; fromTo = `<b>${a.from}</b> → <b>${a.to}</b>（無組合）`; }
+      return `
+        <div class="adj-card" data-kind="${a.kind}">
+          <div class="adj-head">
+            <span class="icon">${icon}</span>
+            <span class="from-to">${fromTo}</span>
+            <span class="amount">$${Number(a.amount || 0).toLocaleString()}</span>
+          </div>
+          ${a.combination?.length ? `<div class="adj-combo">${a.combination.map((p, i) => `${i ? '<span class="plus">+</span>' : ''}<span class="piece">${p}</span>`).join('')}</div>` : ''}
+        </div>
+      `;
+    }
+    function renderHistory() {
+      if (!state.showHistory || !state.history.length) { els.history.innerHTML = ''; return; }
+      els.history.innerHTML = `
+        <div class="sec-head">
+          <div class="h">歷史紀錄<span class="count">最近 ${state.history.length} 筆</span></div>
+          <button class="icon-btn ghost" id="clearHistoryBtn">⌫</button>
+        </div>
+        ${state.history.map((h) => `
+          <div class="hist-card">
+            <div class="hist-time"><span>${h.ts}</span><span>${h.adjustments.length} 項調整</span></div>
+            ${h.adjustments.slice(0, 3).map((a) => `<div class="hist-line">• ${a.kind === 'transfer' ? `${a.from} → ${a.to} ${a.amount}元` : a.kind === 'charge' ? `${a.to} 補 ${a.amount}元` : a.kind === 'remove' ? `${a.from} 多 ${a.amount}元` : `${a.from} → ${a.to}`}</div>`).join('')}
+          </div>
+        `).join('')}
+      `;
+      document.getElementById('clearHistoryBtn')?.addEventListener('click', () => {
+        state.history = [];
+        localStorage.removeItem('posHistoryManualV1');
+        render();
+      });
+    }
+    function renderDynamic() {
+      renderTabs();
+      renderDiff();
+      renderResults();
+      renderHistory();
+    }
+    function render() {
+      renderTabs();
+      renderInputs();
+      renderChips();
+      renderDiff();
+      renderResults();
+      renderHistory();
+    }
+
+    document.querySelectorAll('.pos-tab').forEach((btn) => btn.addEventListener('click', () => { state.tab = btn.dataset.tab; render(); }));
+    document.getElementById('syncBottomBtn').addEventListener('click', syncDeptToCompany);
+    document.getElementById('computeBtn').addEventListener('click', compute);
+    document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+    document.getElementById('ocrBtn').addEventListener('click', () => {
+      document.getElementById('ocrFileInput').click();
+    });
+    document.getElementById('ocrFileInput').addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = ''; // 清空，下次選同一張圖也能再次觸發change
+      if (!files.length) return;
+      els.ocrReviewArea.innerHTML = `<div class="ocr-review">辨識中，共 ${files.length} 張照片…</div>`;
+      try {
+        const result = await OCRFill.recognizeAndParse(files);
+        OCRFill.renderReviewPanel(els.ocrReviewArea, result, (fields) => {
+          // 套用：把辨識結果寫入百貨POS欄位（OCR字典只涵蓋百貨POS，固定寫入'dept'）
+          Object.entries(fields).forEach(([key, value]) => setVal('dept', key, value));
+          render();
+        });
+      } catch (err) {
+        els.ocrReviewArea.innerHTML = `<div class="ocr-review" style="color:#c0392b;">辨識失敗：${err.message}</div>`;
+      }
+    });
+
+    render();
+    window.state = state; // 方便瀏覽器devtools console或外部測試腳本直接檢視目前狀態
+  </script>
+</body>
+</html>
