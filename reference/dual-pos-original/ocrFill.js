@@ -26,7 +26,7 @@
     // ⚠️ 安全性提醒：純前端架構沒有後端可以藏這把 Key，它會出現在瀏覽器原始碼裡。
     // 務必到 Google Cloud Console → API 和服務 → 憑證 → 這把金鑰 → 應用程式限制，
     // 設成「HTTP 連結網域」只允許你自己的網域呼叫，並設定每日配額上限（例如 100 次/天）。
-    apiKey: 'AIzaSyCIfPvRmmKGWNeCtFwWVawSV5XFG96Mths',
+    apiKey: 'YOUR_GOOGLE_VISION_API_KEY',
 
     // 上傳前縮圖的長邊上限（像素）。手機拍照常常 6~8MB，Vision API 不需要這麼大張，
     // 縮小可以加快上傳速度、省行動網路流量，對辨識率幾乎沒有影響。
