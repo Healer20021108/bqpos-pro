@@ -6,10 +6,9 @@
 import type { PaymentField, PosKind } from './types';
 
 export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
-  // 百貨POS（Global Mall）—— 78 個欄位，順序對齊真實畫面由上到下的位置。
-  // active:false ＝較少用的欄位：空白時收進摺疊區，有填入金額才浮到上方。
-  // active!==false 為常用欄位，即使空白也固定顯示在上方，方便手動輸入。
-  // 所有欄位都可手動輸入或由 OCR 帶入（顯示／摺疊規則見 view.ts renderInputs）。
+  // 百貨POS（Global Mall）—— 78 個欄位，順序對齊真實畫面；UI 每 11 項直列成一頁。
+  // active:false 保留為「較少使用」的資料註記；UI 仍固定顯示全部欄位。
+  // 所有欄位都可手動輸入或由 OCR 帶入（顯示規則見 view.ts renderInputs）。
   dept: [
     { key: 'cash', label: '現金', glyph: '金' },
     { key: 'credit_card', label: '連線信用卡', glyph: '卡' },
@@ -90,8 +89,8 @@ export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
     { key: 'simple_pay', label: '簡單付', glyph: '付', active: false },
     { key: 'full_ying_pay', label: '全盈+PAY', glyph: '付', active: false },
   ],
-  // 公司POS —— 23 個欄位。前 15 項為常用主欄位；後 8 項較少用或無百貨對應，
-  // 空白時收進摺疊區（active:false），有填入金額才浮上方。
+  // 公司POS —— 23 個欄位，UI 同樣每 11 項直列成一頁。
+  // active:false 僅保留為資料註記，UI 仍固定顯示全部欄位。
   // 數值來源是百貨POS對應項目加總後的結果（見 syncDeptToCompany）。
   company: [
     { key: 'cash', label: '現金', glyph: '金' },

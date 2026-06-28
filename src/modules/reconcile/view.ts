@@ -11,6 +11,7 @@ import {
   toNumbers,
 } from './calculate';
 import { recognizeAndParse, ocrConfig, type MergedResult } from './ocr';
+import { paginate } from './pagination';
 import type { Adjustment, PosKind, PosState, ReconcileResult } from './types';
 import './reconcile.css';
 
@@ -144,10 +145,10 @@ export function renderReconcile(container: HTMLElement): () => void {
   const num = (v: number): string => (v ? Number(v).toLocaleString() : '—');
   const countFilled = (obj: PosState): number =>
     Object.values(obj).filter((v) => v != null && v !== '' && v !== 0).length;
-  // 該POS所有付款方式的合計（含摺疊區的欄位；總帳另存 state.total，不在此計入）。
+  // 該POS所有付款方式的合計（總帳另存 state.total，不在此計入）。
   const sumAll = (pos: PosKind): number =>
     Object.values(state[pos]).reduce((s: number, v) => s + (typeof v === 'number' ? v : 0), 0);
-  // 「有填入」＝有大於 0 的金額。空白或 0 都視為未填入，會被收進摺疊區。
+  // 「有填入」＝有大於 0 的金額。空白或 0 不套用醒目樣式。
   const hasInput = (pos: PosKind, key: string): boolean => {
     const v = state[pos][key];
     return typeof v === 'number' && v > 0;
@@ -248,37 +249,32 @@ export function renderReconcile(container: HTMLElement): () => void {
   function renderInputs(): void {
     const pos = state.tab;
     const fields = PAYMENT_GROUPS[pos];
-    // 常用欄位(active !== false)即使空白也固定在上方，方便手動輸入；
-    // 罕用欄位(active === false)只有「有填入金額」時才浮上來，否則收進摺疊區。
-    // OCR／同步帶入後會在 render() 重新分組，照片抓到值的罕用欄位就會自動浮上來。
-    const topFields = fields.filter((f) => f.active !== false || hasInput(pos, f.key));
-    const hiddenFields = fields.filter((f) => f.active === false && !hasInput(pos, f.key));
+    // 每頁 11 個付款方式，由上往下直列；各頁再放進橫向滑動容器。
+    // 手動與 OCR 帶入都寫進同一份 state，因此大於 0 的欄位會套用相同醒目樣式。
+    const pages = paginate(fields, 11);
     const rowHtml = (f: (typeof fields)[number]): string => {
-      const filled = state[pos][f.key] != null && state[pos][f.key] !== '';
+      const filled = hasInput(pos, f.key);
       // ⚠️ 只標在百貨POS：表示這格是 OCR 以「低信心／多張不一致」帶入的，請人工再確認一次。
       const warn = pos === 'dept' && state.ocrWarn.has(f.key) ? ' <span class="warn" title="辨識信心不足，請確認">⚠️</span>' : '';
-      // 「刪除」鍵只在有值時出現，讓人一鍵清掉辨識錯誤的項目（清空＝視為 0）。
-      const delBtn = filled
-        ? `<button class="row-del" data-act="rowDel" data-pos="${pos}" data-key="${f.key}" title="清除這格">刪除</button>`
-        : '';
       return `
-      <div class="row">
-        <div class="lbl"><span class="glyph">${f.glyph}</span><span>${f.label}${warn}</span></div>
-        <div class="cell">
-          ${delBtn}
-          <input type="number" inputmode="numeric" placeholder="0" data-pos="${pos}" data-key="${f.key}" value="${val(pos, f.key)}" />
-        </div>
-      </div>`;
+        <div class="payment-row" data-key="${f.key}" data-filled="${filled}">
+          <span class="payment-label"><span class="glyph">${f.glyph}</span><span>${f.label}${warn}</span></span>
+          <div class="payment-value">
+            <input type="number" inputmode="numeric" placeholder="0" aria-label="${f.label}金額" data-pos="${pos}" data-key="${f.key}" value="${val(pos, f.key)}" />
+            <button class="row-del" data-act="rowDel" data-pos="${pos}" data-key="${f.key}" title="清除這格">刪除</button>
+          </div>
+        </div>`;
     };
-    let html = topFields.map(rowHtml).join('');
-    if (hiddenFields.length) {
-      html += `
-        <details class="pending-group">
-          <summary>其他付款方式 · 尚未填入（${hiddenFields.length} 項）</summary>
-          <div class="rows-inner">${hiddenFields.map(rowHtml).join('')}</div>
-        </details>`;
-    }
-    els.inputRows.innerHTML = html;
+    const pagesHtml = pages.map((page, index) => `
+      <section class="payment-page" aria-label="第 ${index + 1} 頁，共 ${pages.length} 頁">
+        <div class="payment-page-number">第 ${index + 1} / ${pages.length} 頁</div>
+        <div class="payment-page-rows">${page.map(rowHtml).join('')}</div>
+      </section>`).join('');
+    els.inputRows.innerHTML = `
+      <div class="page-scroll-hint" aria-hidden="true">← 左右滑動換頁 →</div>
+      <div class="payment-pages" role="region" aria-label="${pos === 'dept' ? '百貨' : '公司'} POS 付款方式，共 ${pages.length} 頁" tabindex="0">
+        ${pagesHtml}
+      </div>`;
   }
 
   function renderChips(): void {
@@ -539,7 +535,7 @@ export function renderReconcile(container: HTMLElement): () => void {
           state.ocrWarn.delete(key); // 這次讀得很有把握 → 清掉舊的 ⚠️
         }
       });
-      render(); // 重畫表單：帶入值、把抓到值的罕用欄位浮上來、低信心欄位標 ⚠️
+      render(); // 重畫表單：帶入值、醒目標示非零欄位、低信心欄位標 ⚠️
       renderOcrNotice(result, applied, warned);
     } catch (err) {
       if (unmounted || myRun !== ocrRun) return;
@@ -586,10 +582,14 @@ export function renderReconcile(container: HTMLElement): () => void {
       if (pos && key) {
         // ⚠️ 只屬於百貨POS；公司POS有同名 key（cash／linepay…），不可在公司端清掉百貨的 ⚠️。
         if (pos === 'dept' && state.ocrWarn.delete(key)) {
-          // 手動改過＝已人工確認：即時移除這列的 ⚠️（不重畫整列、不打斷輸入）。
-          t.closest('.row')?.querySelector('.lbl .warn')?.remove();
+          // 手動改過＝已人工確認：即時移除該列的 ⚠️（不重畫分頁、不打斷輸入）。
+          t.closest('.payment-row')?.querySelector('.warn')?.remove();
         }
         setVal(pos, key, t.value);
+        // renderDynamic 不重畫輸入分頁；在原 DOM 即時切換外框、粗體與刪除鍵。
+        const filled = hasInput(pos, key);
+        const row = t.closest<HTMLElement>('.payment-row');
+        if (row) row.dataset.filled = String(filled);
       }
     },
     { signal },
@@ -627,13 +627,18 @@ export function renderReconcile(container: HTMLElement): () => void {
       else if (act === 'export') exportText();
       else if (act === 'ocrAdd') els.fileInput.click();
       else if (act === 'rowDel') {
-        // 一鍵清掉這格（辨識錯誤時用）：清空值、移除 ⚠️、重畫（罕用欄位會收回摺疊區）。
+        // 一鍵清掉這格（辨識錯誤時用）：就地清空，避免橫向分頁跳回第一頁。
         const pos = actEl?.dataset.pos as PosKind | undefined;
         const key = actEl?.dataset.key;
         if (pos && key) {
           state[pos][key] = '';
           if (pos === 'dept') state.ocrWarn.delete(key); // ⚠️ 只屬於百貨POS
-          render();
+          const row = actEl.closest<HTMLElement>('.payment-row');
+          const input = row?.querySelector<HTMLInputElement>('input[data-key]');
+          if (input) input.value = '';
+          row?.querySelector('.warn')?.remove();
+          if (row) row.dataset.filled = 'false';
+          renderDynamic();
         }
       } else if (act === 'clearHistory') {
         state.history = [];
