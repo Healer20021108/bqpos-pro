@@ -2,6 +2,7 @@
 // 殼層不認得任何特定功能，只透過 FeatureModule 介面操作，因此新增模組不需改這裡。
 
 import type { FeatureModule } from '../core/types';
+import { animateShellIn, animateModuleIn, animateTabActivate } from '../core/animate';
 import './shell.css';
 
 // 從網址 hash 解析出模組 id，例如 "#/exchange" → "exchange"。
@@ -73,8 +74,12 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): () => voi
       const selected = bid === mod.id;
       btn.setAttribute('aria-selected', String(selected));
       btn.classList.toggle('is-active', selected);
+      if (selected) animateTabActivate(btn);
     }
     main.scrollTop = 0;
+
+    // 純外觀：讓剛掛上的模組內容交錯進場（受保護的付款分頁區只淡入、不動排版）。
+    animateModuleIn(main);
   }
 
   window.addEventListener(
@@ -85,6 +90,9 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): () => voi
     },
     { signal },
   );
+
+  // 殼層進場動畫（標題＋分頁列），只在首次建立時跑一次。
+  animateShellIn(root);
 
   // 初始進入：有合法 hash 就用它，否則正規化成第一個模組（用 replaceState 不產生多餘的歷史紀錄）。
   const initial = idFromHash();
