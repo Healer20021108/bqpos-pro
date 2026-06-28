@@ -6,6 +6,26 @@
   font-size: 0.85rem;
 }
 
+.reserve-box-control {
+  margin: 0 0 16px;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.reserve-box-control legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.box-mode-note {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 /* 面額輸入列 */
 .denoms {
   display: grid;

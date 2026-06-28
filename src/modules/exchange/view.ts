@@ -1,7 +1,7 @@
 // 換錢模組的 UI 層：讀「目前各幣值總數」→ 呼叫純函式 → 顯示「好換」要換多少。
 // 不在此處放計算規則，所有計算都來自 calculate.ts。
 
-import { denominations, unitLabel, stockTargets } from '../../core/rules';
+import { denominations, getStockTargets, unitLabel, type ReserveBoxCount } from '../../core/rules';
 import { formatNT } from '../../core/format';
 import type { Denomination } from '../../core/types';
 import { goodExchange, sanitizeCount, type GoodExchangeResult } from './calculate';
@@ -15,6 +15,20 @@ const TEMPLATE = `
   </section>
 
   <section class="card">
+    <fieldset class="reserve-box-control">
+      <legend>備用金盒數</legend>
+      <div class="seg">
+        <label>
+          <input type="radio" name="reserve-boxes" value="1" checked />
+          <span>一盒（預設）</span>
+        </label>
+        <label>
+          <input type="radio" name="reserve-boxes" value="2" />
+          <span>兩盒</span>
+        </label>
+      </div>
+      <p class="box-mode-note" data-out="box-mode-note">目前按「一盒備用金＋POS 預留」計算。</p>
+    </fieldset>
     <h2>今日結論</h2>
     <p class="conclusion ok" data-out="conclusion">請輸入數量。</p>
   </section>
@@ -46,10 +60,10 @@ function buildInputs(wrap: HTMLElement): void {
   wrap.innerHTML = denominations
     .map((d) => {
       const u = unitLabel(d);
-      const target = stockTargets[d];
+      const target = getStockTargets(1)[d];
       return `
         <label class="denom-row">
-          <span class="denom-name">${d} 元 <small>（${u}，目標 ${target}）</small></span>
+          <span class="denom-name">${d} 元 <small>（${u}，目標 <span data-target="${d}">${target}</span>）</small></span>
           <input type="text" inputmode="numeric" pattern="[0-9]*"
                  data-count="${d}" placeholder="0" aria-label="${d} 元目前數量" />
         </label>`;
@@ -108,11 +122,11 @@ function renderTable(
     .map(
       (l) => {
         // 「多出」= 目前高於目標的真實餘量（規格 §8.5）；好換多換的部分另在清單／結論呈現。
-        const overTarget = Math.max(0, current[l.denom] - stockTargets[l.denom]);
+        const overTarget = Math.max(0, current[l.denom] - l.target);
         return `<tr>
         <td>${l.denom}</td>
         <td>${current[l.denom]}</td>
-        <td>${stockTargets[l.denom]}</td>
+        <td>${l.target}</td>
         <td>${l.exact || '－'}</td>
         <td>${l.exchange || '－'}</td>
         <td>${overTarget || '－'}</td>
@@ -134,12 +148,29 @@ export function renderExchange(container: HTMLElement): () => void {
   const exchangeListEl = container.querySelector<HTMLElement>('[data-out="exchange-list"]')!;
   const exchangeTotalEl = container.querySelector<HTMLElement>('[data-out="exchange-total"]')!;
   const tableBodyEl = container.querySelector<HTMLElement>('[data-out="detail-body"]')!;
+  const boxModeNoteEl = container.querySelector<HTMLElement>('[data-out="box-mode-note"]')!;
+
+  function readReserveBoxes(): ReserveBoxCount {
+    const checked = container.querySelector<HTMLInputElement>('input[name="reserve-boxes"]:checked');
+    return checked?.value === '2' ? 2 : 1;
+  }
+
+  function renderTargets(reserveBoxes: ReserveBoxCount): void {
+    const targets = getStockTargets(reserveBoxes);
+    for (const d of denominations) {
+      const targetEl = container.querySelector<HTMLElement>(`[data-target="${d}"]`);
+      if (targetEl) targetEl.textContent = String(targets[d]);
+    }
+    boxModeNoteEl.textContent = `目前按「${reserveBoxes === 2 ? '兩盒' : '一盒'}備用金＋POS 預留」計算。`;
+  }
 
   function render(): void {
     const counts = readCounts(container);
-    const result = goodExchange({ counts });
+    const reserveBoxes = readReserveBoxes();
+    const result = goodExchange({ counts, reserveBoxes });
     const current = {} as Record<Denomination, number>;
     for (const d of denominations) current[d] = sanitizeCount(counts[d]);
+    renderTargets(reserveBoxes);
     renderConclusion(conclusionEl, result);
     renderExchangeList(exchangeListEl, exchangeTotalEl, result);
     renderTable(tableBodyEl, result, current);

@@ -73,7 +73,7 @@ Before finishing any task:
 
 <!-- SPEC_SYNC_START -->
 Spec source: PROJECT_SPEC.md
-Spec SHA-256 short hash: df4f310df2f2
-Synced at: 2026-06-23T21:12:03.164Z
+Spec SHA-256 short hash: c89b94142afe
+Synced at: 2026-06-28T21:36:58.363Z
 Instruction: If any local instruction conflicts with PROJECT_SPEC.md, follow PROJECT_SPEC.md.
 <!-- SPEC_SYNC_END -->

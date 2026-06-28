@@ -1,11 +1,11 @@
 // 換錢計算核心（純函式，無 DOM、無副作用，可單獨測試）。
 //
-// 簡化版邏輯：每個幣值各自比對單一目標持有量。
+// 簡化版邏輯：依一盒／兩盒選出目標後，每個幣值各自比對目標持有量。
 //   要換的數量 = max(0, 目標 − 目前)
 //   多出的數量 = max(0, 目前 − 目標)
 
 import type { Denomination } from '../../core/types';
-import { denominations, unitLabel, stockTargets } from '../../core/rules';
+import { denominations, getStockTargets, unitLabel, type ReserveBoxCount } from '../../core/rules';
 
 /**
  * 將輸入值正規化為合法數量。
@@ -38,8 +38,12 @@ export interface CalculationResult {
   needsExchange: boolean;
 }
 
-export function calcDenomination(denom: Denomination, current: number): DenominationResult {
-  const target = stockTargets[denom];
+export function calcDenomination(
+  denom: Denomination,
+  current: number,
+  reserveBoxes: ReserveBoxCount = 1,
+): DenominationResult {
+  const target = getStockTargets(reserveBoxes)[denom];
   const exchangeCount = Math.max(0, target - current);
   const extra = Math.max(0, current - target);
   return {
@@ -55,12 +59,14 @@ export function calcDenomination(denom: Denomination, current: number): Denomina
 
 export interface ExchangeInput {
   counts: Partial<Record<Denomination, unknown>>;
+  /** 目前統計涵蓋的預備金盒數；預設一盒，維持既有行為。 */
+  reserveBoxes?: ReserveBoxCount;
 }
 
 export function calculateAll(input: ExchangeInput): CalculationResult {
   const counts = input.counts ?? {};
   const lines = denominations.map((denom) =>
-    calcDenomination(denom, sanitizeCount(counts[denom])),
+    calcDenomination(denom, sanitizeCount(counts[denom]), input.reserveBoxes),
   );
   const totalAmount = lines.reduce((sum, l) => sum + l.amount, 0);
   const needsExchange = lines.some((l) => l.exchangeCount > 0);
@@ -81,6 +87,8 @@ const coinOrder: Denomination[] = [10, 5, 1];
 export interface GoodExchangeLine {
   denom: Denomination;
   unit: '張' | '個';
+  /** 此次所選盒數對應的目標數量。 */
+  target: number;
   /** 精準缺口數量。 */
   exact: number;
   /** 好換後實際要換的數量。 */
@@ -119,6 +127,7 @@ export function goodExchange(input: ExchangeInput): GoodExchangeResult {
     const lines = denominations.map((d) => ({
       denom: d,
       unit: unitLabel(d),
+      target: base.lines.find((l) => l.denom === d)!.target,
       exact: 0,
       exchange: 0,
       extra: 0,
@@ -159,6 +168,7 @@ export function goodExchange(input: ExchangeInput): GoodExchangeResult {
   const lines = denominations.map((d) => ({
     denom: d,
     unit: unitLabel(d),
+    target: base.lines.find((l) => l.denom === d)!.target,
     exact: exact[d],
     exchange: exch[d],
     extra: exch[d] - exact[d],

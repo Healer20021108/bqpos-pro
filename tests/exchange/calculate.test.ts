@@ -1,4 +1,4 @@
-// 換錢計算核心測試（簡化版：單一目標持有量）。執行：npm test
+// 換錢計算核心測試（預設一盒，可切換兩盒目標）。執行：npm test
 import { test, expect } from 'vitest';
 
 import {
@@ -25,6 +25,22 @@ test('目標 = 平日建議量 + 預備金硬標準（100 元應為 50）', () =
   expect(r.exchangeCount).toBe(30); // 50 - 20
   expect(r.amount).toBe(3000); // 30 張 × 100
   expect(r.extra).toBe(0);
+});
+
+test('50 元目標為 27 個', () => {
+  const r = calcDenomination(50, 20);
+  expect(r.target).toBe(27);
+  expect(r.exchangeCount).toBe(7);
+  expect(r.amount).toBe(350);
+});
+
+test('兩盒模式使用 POS 預留＋兩盒備用金目標', () => {
+  const expected = { 500: 26, 100: 75, 50: 46, 10: 230, 5: 136, 1: 430 } as const;
+  for (const [denom, target] of Object.entries(expected)) {
+    const r = calcDenomination(Number(denom) as keyof typeof expected, 0, 2);
+    expect(r.target).toBe(target);
+    expect(r.exchangeCount).toBe(target);
+  }
 });
 
 test('目前低於目標：要換 目標 − 目前', () => {
@@ -55,20 +71,33 @@ test('小數輸入視為無效（0），不會悄悄變成別的數量', () => {
 });
 
 test('calculateAll：全部達標時不需換錢，合計為 0', () => {
-  const atTarget = { 500: 16, 100: 50, 50: 26, 10: 130, 5: 76, 1: 230 } as const;
+  const atTarget = { 500: 16, 100: 50, 50: 27, 10: 130, 5: 76, 1: 230 } as const;
   const result = calculateAll({ counts: atTarget });
   expect(result.needsExchange).toBe(false);
   expect(result.totalAmount).toBe(0);
 });
 
-test('calculateAll：全空（皆 0）時，需把每個幣值補到目標，合計 NT$16,210', () => {
+test('calculateAll：全空（皆 0）時，需把每個幣值補到目標，合計 NT$16,260', () => {
   const result = calculateAll({ counts: {} });
   expect(result.needsExchange).toBe(true);
-  expect(result.totalAmount).toBe(16210);
+  expect(result.totalAmount).toBe(16260);
+});
+
+test('calculateAll：兩盒模式全空時，精準缺口合計 NT$26,210', () => {
+  const result = calculateAll({ counts: {}, reserveBoxes: 2 });
+  expect(result.needsExchange).toBe(true);
+  expect(result.totalAmount).toBe(26210);
+});
+
+test('calculateAll：兩盒模式全部達標時不需換錢', () => {
+  const atTarget = { 500: 26, 100: 75, 50: 46, 10: 230, 5: 136, 1: 430 } as const;
+  const result = calculateAll({ counts: atTarget, reserveBoxes: 2 });
+  expect(result.needsExchange).toBe(false);
+  expect(result.totalAmount).toBe(0);
 });
 
 test('calculateAll：只有部分幣值不足時，只列出不足的', () => {
-  const result = calculateAll({ counts: { 500: 16, 100: 50, 50: 26, 10: 120, 5: 76, 1: 230 } });
+  const result = calculateAll({ counts: { 500: 16, 100: 50, 50: 27, 10: 120, 5: 76, 1: 230 } });
   const need = result.lines.filter((l) => l.exchangeCount > 0);
   expect(need.length).toBe(1);
   expect(need[0]?.denom).toBe(10);
@@ -84,7 +113,7 @@ function line(result: ReturnType<typeof goodExchange>, denom: number) {
 }
 
 test('好換：沒有缺口時不換錢', () => {
-  const atTarget = { 500: 16, 100: 50, 50: 26, 10: 130, 5: 76, 1: 230 } as const;
+  const atTarget = { 500: 16, 100: 50, 50: 27, 10: 130, 5: 76, 1: 230 } as const;
   const r = goodExchange({ counts: atTarget });
   expect(r.needsExchange).toBe(false);
   expect(r.total).toBe(0);
@@ -92,9 +121,9 @@ test('好換：沒有缺口時不換錢', () => {
 });
 
 test('好換：完整走一遍（精準缺 143 → 銅板補5倍數 → 整百 → 整千 1000）', () => {
-  // 目標 500:16 100:50 50:26 10:130 5:76 1:230
+  // 目標 500:16 100:50 50:27 10:130 5:76 1:230
   // current 設計成精準缺口 = 50:1, 10:8, 5:2, 1:3（其餘達標），精準總額 143。
-  const current = { 500: 16, 100: 50, 50: 25, 10: 122, 5: 74, 1: 227 };
+  const current = { 500: 16, 100: 50, 50: 26, 10: 122, 5: 74, 1: 227 };
   const r = goodExchange({ counts: current });
 
   expect(r.exactTotal).toBe(143);
@@ -113,9 +142,9 @@ test('好換：完整走一遍（精準缺 143 → 銅板補5倍數 → 整百 �
 test('好換不變量：總額必為 1000 的倍數、銅板皆為 5 的倍數、付款全用千元', () => {
   const samples = [
     { 500: 0, 100: 0, 50: 0, 10: 0, 5: 0, 1: 0 }, // 全缺
-    { 500: 16, 100: 50, 50: 25, 10: 122, 5: 74, 1: 227 },
+    { 500: 16, 100: 50, 50: 26, 10: 122, 5: 74, 1: 227 },
     { 500: 10, 100: 30, 50: 20, 10: 100, 5: 60, 1: 200 },
-    { 500: 16, 100: 49, 50: 26, 10: 128, 5: 71, 1: 229 },
+    { 500: 16, 100: 49, 50: 27, 10: 128, 5: 71, 1: 229 },
   ];
   for (const counts of samples) {
     const r = goodExchange({ counts });
@@ -129,7 +158,7 @@ test('好換不變量：總額必為 1000 的倍數、銅板皆為 5 的倍數�
 });
 
 test('好換：每個面額的好換數量都 ≥ 精準數量（不會少換）', () => {
-  const r = goodExchange({ counts: { 500: 16, 100: 50, 50: 25, 10: 122, 5: 74, 1: 227 } });
+  const r = goodExchange({ counts: { 500: 16, 100: 50, 50: 26, 10: 122, 5: 74, 1: 227 } });
   for (const l of r.lines) {
     expect(l.exchange).toBeGreaterThanOrEqual(l.exact);
     expect(l.extra).toBe(l.exchange - l.exact);
