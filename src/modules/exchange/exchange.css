@@ -170,8 +170,8 @@ table.detail {
 
 table.detail th,
 table.detail td {
-  padding: 8px 4px;
-  text-align: right;
+  padding: 8px 6px;
+  text-align: left;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
