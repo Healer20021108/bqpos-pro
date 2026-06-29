@@ -24,25 +24,19 @@ function isProtectedBlock(el: Element): boolean {
   return el.matches('.rows') || el.querySelector('.payment-pages') !== null;
 }
 
-/** 殼層開場：像電影片頭——光帶亮起、提詞與標題升起、暖色分隔線拉開、分頁列依序入場。 */
+/** 殼層開場：分頁列像片頭字卡依序落下入場。 */
 export function animateShellIn(root: HTMLElement): void {
   if (prefersReducedMotion()) return;
-  const kicker = root.querySelector('.stage-kicker');
-  const title = root.querySelector('.stage-title');
-  const rule = root.querySelector('.stage-rule');
   const tabs = root.querySelectorAll('.tab-bar .tab');
-
-  const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-  if (kicker) tl.from(kicker, { autoAlpha: 0, y: -8, duration: 0.4 });
-  if (title) {
-    tl.from(title, { autoAlpha: 0, y: 22, filter: 'blur(8px)', duration: 0.6 }, '-=0.2');
-  }
-  if (rule) {
-    tl.from(rule, { scaleX: 0, transformOrigin: 'left center', duration: 0.5 }, '-=0.35');
-  }
-  if (tabs.length) {
-    tl.from(tabs, { autoAlpha: 0, y: -8, duration: 0.35, stagger: 0.07 }, '-=0.25');
-  }
+  if (!tabs.length) return;
+  gsap.from(tabs, {
+    autoAlpha: 0,
+    y: -10,
+    duration: 0.4,
+    ease: 'power3.out',
+    stagger: 0.07,
+    clearProps: 'opacity,visibility,transform',
+  });
 }
 
 /**

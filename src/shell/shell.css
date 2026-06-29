@@ -1,6 +1,6 @@
-/* 殼層樣式：電影感「舞台」框架。
-   上方深色舞台（標題＋分頁列同為暗色開場區）＝ letterbox 開場；下方明亮高效工作區。
-   分頁列保持 sticky（不放進 overflow:hidden 容器，避免吸附失效）。 */
+/* 殼層樣式：精簡為「深色控制列（分頁）＋ 明亮工作區」。
+   標題舞台已移除；分頁列成為頂端的深色控制列，保持 sticky、底部圓角＋投影。
+   注意：sticky 元素不可被放進 overflow:hidden 的祖先，否則吸附會失效。 */
 
 .app-shell {
   max-width: 560px;
@@ -11,63 +11,18 @@
   background: var(--bg);
 }
 
-/* 深色舞台標題區：戲劇性的暗色開場 */
-.app-header {
-  position: relative;
-  padding: 24px 20px 16px;
-  background:
-    radial-gradient(130% 150% at 16% -20%, var(--stage-2) 0%, var(--stage) 60%),
-    var(--stage);
-  color: var(--stage-ink);
-}
-
-/* 頂部一條極細暖色光帶，像放映機投出的光 */
-.app-header::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  opacity: 0.85;
-}
-
-.stage-kicker {
-  margin: 0 0 8px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.stage-title {
-  margin: 0;
-  font-size: 2rem;
-  line-height: 1.05;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  color: var(--stage-ink);
-}
-
-.stage-rule {
-  display: block;
-  height: 2px;
-  width: 100%;
-  margin-top: 14px;
-  background: linear-gradient(90deg, var(--accent) 0%, transparent 70%);
-  transform-origin: left center;
-}
-
-/* 分頁列：沿用深色舞台、吸附頂端、底部圓角＋投影，像一條浮起的控制列。
-   注意：sticky 元素不可被放進 overflow:hidden 的祖先，否則吸附會失效。 */
+/* 分頁列：深色控制列、吸附頂端、底部圓角＋投影，像一條浮起的控制列。 */
 .tab-bar {
   position: sticky;
   top: 0;
   z-index: 10;
   display: flex;
   gap: 8px;
-  padding: 8px 16px 14px;
-  background: var(--stage);
+  padding: 14px 16px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  background:
+    radial-gradient(120% 200% at 18% -40%, var(--stage-2) 0%, var(--stage) 60%),
+    var(--stage);
   border-bottom-left-radius: 24px;
   border-bottom-right-radius: 24px;
   box-shadow: 0 12px 28px oklch(0.24 0.02 60 / 0.18);
