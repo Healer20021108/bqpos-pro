@@ -1,0 +1,187 @@
+/* 環球清帳模組樣式：Global Mall 結帳單，項目｜金額兩段式表格。
+   沿用全站暖琥珀電影感；輸入沿用「已填入＝粗外框＋亮顯」語彙；自動補列標「補」。 */
+
+.uv {
+  color: var(--ink);
+}
+
+.uv-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.uv-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.uv-sub {
+  margin-top: 3px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.uv-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.uv-btn {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, transform 0.14s var(--ease-out);
+}
+
+.uv-btn:active {
+  transform: scale(0.96);
+}
+
+.uv-btn.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+/* 區段（實收款別／實收有價證券） */
+.uv-section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.uv-section-title {
+  margin: 2px 2px 10px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--accent-ink);
+}
+
+.uv-rows {
+  display: grid;
+  gap: 6px;
+}
+
+/* 單列：項目 | 金額 */
+.uv-row {
+  display: grid;
+  grid-template-columns: 1fr 128px;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-2);
+  transition: background 0.16s var(--ease-out), border-color 0.16s, box-shadow 0.16s;
+}
+
+.uv-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.uv-amount {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: right;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.uv-amount:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 已填入：粗外框＋亮顯，現場一眼看出哪些已對好 */
+.uv-row[data-filled='true'] {
+  background: var(--accent-soft);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px oklch(0.66 0.16 55 / 0.12);
+}
+
+.uv-row[data-filled='true'] .uv-label {
+  font-weight: 800;
+  color: var(--accent-ink);
+}
+
+.uv-row[data-filled='true'] .uv-amount {
+  border: 2px solid var(--accent);
+  font-weight: 800;
+  color: var(--accent-ink);
+}
+
+/* 自動補列（外帶自取下方）：虛線框 + 「補」標籤 */
+.uv-row.is-appended,
+.uv-row[data-id^='A'] {
+  border-style: dashed;
+}
+
+.uv-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* 實收總計 */
+.uv-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--stage);
+  color: var(--stage-ink);
+  box-shadow: var(--shadow-card);
+}
+
+.uv-total-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--stage-muted);
+}
+
+.uv-total-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}

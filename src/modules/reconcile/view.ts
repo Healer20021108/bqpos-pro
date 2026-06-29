@@ -13,6 +13,7 @@ import {
 } from './calculate';
 import { recognizeAndParse, ocrConfig, type MergedResult } from './ocr';
 import { paginate } from './pagination';
+import { saveDeptSnapshot } from '../../core/dept-snapshot';
 import type { Adjustment, PosKind, PosState, ReconcileResult } from './types';
 import './reconcile.css';
 
@@ -159,6 +160,8 @@ export function renderReconcile(container: HTMLElement): () => void {
 
   function setVal(pos: PosKind, key: string, value: string): void {
     state[pos][key] = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0);
+    // 百貨POS（手填或 OCR 都走這裡）一有變動就存一份金額快照，供「環球清帳」帶入。
+    if (pos === 'dept') saveDeptSnapshot(toNumbers(state.dept));
     renderDynamic();
   }
 
@@ -200,6 +203,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     if (!confirm('清空所有輸入與歷史記錄？')) return;
     state.dept = {};
     state.company = {};
+    saveDeptSnapshot({}); // 連同環球清帳的帶入來源一起清空
     state.results = null;
     state.history = [];
     state.enabled = { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false };
