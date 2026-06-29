@@ -1,19 +1,46 @@
-/* 全域樣式：設計變數、重置、以及可被各模組共用的通用元件（card / 分段選擇 / 結果清單）。 */
+/* 全域樣式：設計變數、重置、以及可被各模組共用的通用元件（card / 分段選擇 / 結果清單）。
+   2026-06-30 視覺改版：以「電影敘事」為主軸——上方深色舞台（letterbox stage）＋下方明亮高效工作區。
+   暖琥珀色主色與對帳模組（.rc）一致，整體手機優先、動態收斂、現場好讀。 */
 
 :root {
-  --bg: #f4f5f7;
-  --card: #ffffff;
-  --ink: #1c2530;
-  --muted: #5b6675;
-  --line: #e2e6ec;
-  --accent: #1f6feb;
-  --ok-bg: #e7f6ec;
-  --ok-ink: #1a7f3c;
-  --mid-bg: #fff6e5;
-  --mid-ink: #8a5300;
-  --need-bg: #fdecec;
-  --need-ink: #b3261e;
-  --radius: 12px;
+  /* 工作區（明亮）暖中性色 */
+  --bg: oklch(0.985 0.008 75);
+  --bg-2: oklch(0.965 0.012 72);
+  --card: oklch(1 0 0);
+  --ink: oklch(0.24 0.02 60);
+  --ink-soft: oklch(0.38 0.018 62);
+  --muted: oklch(0.54 0.016 65);
+  --line: oklch(0.91 0.01 72);
+  --line-2: oklch(0.85 0.014 72);
+
+  /* 主色：暖琥珀（與 .rc 對帳模組一致，全站統一） */
+  --accent: oklch(0.66 0.16 55);
+  --accent-strong: oklch(0.6 0.18 50);
+  --accent-ink: oklch(0.34 0.1 52);
+  --accent-soft: oklch(0.955 0.04 68);
+  --accent-line: oklch(0.86 0.08 62);
+
+  /* 狀態色 */
+  --ok-bg: oklch(0.96 0.03 155);
+  --ok-ink: oklch(0.5 0.13 155);
+  --mid-bg: oklch(0.965 0.04 85);
+  --mid-ink: oklch(0.52 0.11 75);
+  --need-bg: oklch(0.965 0.035 25);
+  --need-ink: oklch(0.55 0.18 25);
+
+  /* 深色舞台（cinematic header） */
+  --stage: oklch(0.24 0.02 60);
+  --stage-2: oklch(0.3 0.025 58);
+  --stage-ink: oklch(0.97 0.01 75);
+  --stage-muted: oklch(0.74 0.02 70);
+  --stage-line: oklch(1 0 0 / 0.1);
+
+  --radius: 16px;
+  --radius-lg: 22px;
+  --shadow-card: 0 1px 0 oklch(1 0 0 / 0.7) inset, 0 1px 2px oklch(0.3 0.02 60 / 0.05),
+    0 10px 30px oklch(0.3 0.02 60 / 0.06);
+  --shadow-pop: 0 8px 24px oklch(0.66 0.16 55 / 0.18);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -31,20 +58,26 @@ body {
   background: var(--bg);
   color: var(--ink);
   line-height: 1.55;
+  font-variant-numeric: tabular-nums;
 }
 
-/* 通用卡片 */
+/* 通用卡片：升級為柔和景深，呼應對帳模組質感 */
 .card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px;
+  border-radius: var(--radius-lg);
+  padding: 16px;
   margin-bottom: 14px;
+  box-shadow: var(--shadow-card);
 }
 
 .card h2 {
-  font-size: 1rem;
-  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 12px;
 }
 
 .card h2.mt {
@@ -75,19 +108,25 @@ body {
 .seg span {
   display: block;
   text-align: center;
-  padding: 11px 8px;
+  padding: 12px 8px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 0.92rem;
-  background: #fafbfc;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  background: var(--bg-2);
+  transition: background 0.16s var(--ease-out), border-color 0.16s, color 0.16s,
+    box-shadow 0.16s, transform 0.16s var(--ease-out);
 }
 
 .seg label:has(input:checked) span {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: var(--shadow-pop);
+}
+
+.seg label:active span {
+  transform: scale(0.97);
 }
 
 .seg label:has(input:focus-visible) span {
@@ -105,11 +144,11 @@ body {
 }
 
 .result-list li {
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 0.98rem;
   border-left: 4px solid var(--line);
-  background: #fafbfc;
+  background: var(--bg-2);
 }
 
 .result-list li.state-ok {
@@ -125,17 +164,18 @@ body {
 .result-list li.state-need {
   border-left-color: var(--need-ink);
   background: var(--need-bg);
+  font-weight: 600;
 }
 
 .result-list li.muted {
   color: var(--muted);
-  background: #fafbfc;
+  background: var(--bg-2);
   border-left-color: var(--line);
 }
 
 .total {
-  margin: 12px 2px 0;
-  font-weight: 700;
-  font-size: 1.05rem;
+  margin: 14px 2px 0;
+  font-weight: 800;
+  font-size: 1.08rem;
   text-align: right;
 }

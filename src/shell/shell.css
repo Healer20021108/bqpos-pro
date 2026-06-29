@@ -1,4 +1,6 @@
-/* 殼層樣式：版面框架與分頁列。 */
+/* 殼層樣式：電影感「舞台」框架。
+   上方深色舞台（標題＋分頁列同為暗色開場區）＝ letterbox 開場；下方明亮高效工作區。
+   分頁列保持 sticky（不放進 overflow:hidden 容器，避免吸附失效）。 */
 
 .app-shell {
   max-width: 560px;
@@ -6,50 +8,104 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }
 
+/* 深色舞台標題區：戲劇性的暗色開場 */
 .app-header {
-  padding: 14px 14px 0;
+  position: relative;
+  padding: 24px 20px 16px;
+  background:
+    radial-gradient(130% 150% at 16% -20%, var(--stage-2) 0%, var(--stage) 60%),
+    var(--stage);
+  color: var(--stage-ink);
 }
 
-.app-header h1 {
-  font-size: 1.25rem;
-  margin: 6px 0 10px;
+/* 頂部一條極細暖色光帶，像放映機投出的光 */
+.app-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.85;
 }
 
-/* 分頁列：水平排列，窄螢幕可橫向捲動，吸附在頂端 */
+.stage-kicker {
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.stage-title {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--stage-ink);
+}
+
+.stage-rule {
+  display: block;
+  height: 2px;
+  width: 100%;
+  margin-top: 14px;
+  background: linear-gradient(90deg, var(--accent) 0%, transparent 70%);
+  transform-origin: left center;
+}
+
+/* 分頁列：沿用深色舞台、吸附頂端、底部圓角＋投影，像一條浮起的控制列。
+   注意：sticky 元素不可被放進 overflow:hidden 的祖先，否則吸附會失效。 */
 .tab-bar {
   position: sticky;
   top: 0;
   z-index: 10;
   display: flex;
-  gap: 6px;
-  padding: 8px 14px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  gap: 8px;
+  padding: 8px 16px 14px;
+  background: var(--stage);
+  border-bottom-left-radius: 24px;
+  border-bottom-right-radius: 24px;
+  box-shadow: 0 12px 28px oklch(0.24 0.02 60 / 0.18);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
   flex: 0 0 auto;
-  padding: 9px 16px;
-  border: 1px solid var(--line);
+  padding: 9px 18px;
+  border: 1px solid var(--stage-line);
   border-radius: 999px;
-  background: #fff;
-  color: var(--ink);
+  background: oklch(1 0 0 / 0.06);
+  color: var(--stage-muted);
   font-size: 0.92rem;
+  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition: background 0.18s var(--ease-out), color 0.18s, border-color 0.18s,
+    box-shadow 0.18s, transform 0.16s var(--ease-out);
+}
+
+.tab:active {
+  transform: scale(0.96);
 }
 
 .tab.is-active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
-  font-weight: 600;
+  color: oklch(0.2 0.02 60);
+  font-weight: 700;
+  box-shadow: var(--shadow-pop);
 }
 
 .tab:focus-visible {
@@ -59,7 +115,7 @@
 
 .app-main {
   flex: 1;
-  padding: 14px 14px 48px;
+  padding: 20px 14px 56px;
 }
 
 .shell-empty {

@@ -1,7 +1,8 @@
-/* 換錢模組專屬樣式（通用元件如 .card/.seg/.result-list 放在 base.css 供各模組共用）。 */
+/* 換錢模組專屬樣式（通用元件如 .card/.seg/.result-list 放在 base.css 供各模組共用）。
+   2026-06-30：對齊全站電影感視覺；輸入列沿用「已填入＝醒目外框＋粗體＋快速刪除」的現場語彙。 */
 
 .hint {
-  margin: -2px 0 10px;
+  margin: -4px 0 12px;
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -14,14 +15,17 @@
 }
 
 .reserve-box-control legend {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   padding: 0;
-  font-size: 1rem;
+  font-size: 0.82rem;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .box-mode-note {
-  margin: 8px 2px 0;
+  margin: 10px 2px 0;
   color: var(--muted);
   font-size: 0.82rem;
 }
@@ -37,40 +41,107 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-2);
+  transition: background 0.16s var(--ease-out), border-color 0.16s, box-shadow 0.16s;
+}
+
+/* 已填入：粗外框、暖底、亮顯——對齊對帳模組的醒目語彙，現場一眼看出哪些已數過。 */
+.denom-row[data-filled='true'] {
+  background: var(--accent-soft);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px oklch(0.66 0.16 55 / 0.12);
 }
 
 .denom-name {
   font-size: 0.98rem;
+  font-weight: 600;
 }
 
 .denom-name small {
   color: var(--muted);
+  font-weight: 400;
+}
+
+.denom-row[data-filled='true'] .denom-name {
+  font-weight: 800;
+  color: var(--accent-ink);
+}
+
+.denom-row[data-filled='true'] .denom-name small {
+  color: var(--accent-ink);
+}
+
+.denom-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .denom-row input {
-  width: 110px;
+  width: 100px;
   padding: 10px 12px;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
   text-align: right;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 10px;
+  background: var(--card);
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 .denom-row input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* 今日結論 */
+.denom-row[data-filled='true'] input {
+  border: 2px solid var(--accent);
+  font-weight: 800;
+  color: var(--accent-ink);
+}
+
+/* 快速刪除鈕：只有該列已填入時才出現 */
+.denom-clear {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--need-ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.14s, transform 0.14s var(--ease-out);
+}
+
+.denom-clear:active {
+  background: var(--need-bg);
+  transform: scale(0.92);
+}
+
+.denom-row[data-filled='false'] .denom-clear {
+  display: none;
+}
+
+/* 今日結論：像「判決」的主視覺一句話 */
 .conclusion {
   margin: 0;
-  padding: 14px;
-  border-radius: 10px;
-  font-size: 1.05rem;
-  font-weight: 600;
+  padding: 16px 16px 16px 18px;
+  border-radius: 14px;
+  border-left: 5px solid currentColor;
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .conclusion.ok {
@@ -87,6 +158,7 @@
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
 }
 
 table.detail {
@@ -94,11 +166,12 @@ table.detail {
   border-collapse: collapse;
   font-size: 0.85rem;
   min-width: 460px;
+  font-variant-numeric: tabular-nums;
 }
 
 table.detail th,
 table.detail td {
-  padding: 8px 6px;
+  padding: 9px 8px;
   text-align: right;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
@@ -106,19 +179,27 @@ table.detail td {
 
 table.detail th {
   color: var(--muted);
-  font-weight: 600;
-  background: #fafbfc;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--bg-2);
 }
 
 table.detail td:first-child,
 table.detail th:first-child {
   text-align: left;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+table.detail tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .unit-note {
   color: var(--muted);
   font-size: 0.78rem;
   text-align: center;
-  margin: 4px 0 0;
+  margin: 8px 0 0;
+  line-height: 1.5;
 }

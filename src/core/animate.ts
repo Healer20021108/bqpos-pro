@@ -1,5 +1,8 @@
-// 共用動畫層：以 GSAP 做進場與分頁回饋，純屬「外觀美化」，不參與任何計算或狀態邏輯。
-// 由殼層（shell）在掛載／切換分頁時呼叫；功能模組本身不需要知道動畫的存在。
+// 共用動畫層：以 GSAP 做進場與互動回饋，純屬「外觀美化」，不參與任何計算或狀態邏輯。
+// 由殼層（shell）在掛載／切換分頁時呼叫；功能模組可選用 pulse／pop 做結果與輸入的微回饋。
+//
+// 設計語彙：電影敘事——開場標題升起、各區塊像分鏡依序入場、互動有明確意圖的微動態。
+// 動態收斂、節奏明快（多在 0.3–0.5s），現場工作不被拖慢。
 //
 // 重要約束：雙POS對帳的「付款方式分頁」區（.payment-pages 及其 section）排版不可被更動。
 // 因此凡是包含 .payment-pages 的區塊，一律只做透明度淡入（不位移、不縮放、不留任何 inline 樣式），
@@ -21,20 +24,29 @@ function isProtectedBlock(el: Element): boolean {
   return el.matches('.rows') || el.querySelector('.payment-pages') !== null;
 }
 
-/** 殼層進場：標題與分頁列由上輕輕落下並淡入。 */
+/** 殼層開場：像電影片頭——光帶亮起、提詞與標題升起、暖色分隔線拉開、分頁列依序入場。 */
 export function animateShellIn(root: HTMLElement): void {
   if (prefersReducedMotion()) return;
-  const header = root.querySelector('.app-header');
+  const kicker = root.querySelector('.stage-kicker');
+  const title = root.querySelector('.stage-title');
+  const rule = root.querySelector('.stage-rule');
   const tabs = root.querySelectorAll('.tab-bar .tab');
-  const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
-  if (header) tl.from(header, { autoAlpha: 0, y: -12, duration: 0.4 });
+
+  const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+  if (kicker) tl.from(kicker, { autoAlpha: 0, y: -8, duration: 0.4 });
+  if (title) {
+    tl.from(title, { autoAlpha: 0, y: 22, filter: 'blur(8px)', duration: 0.6 }, '-=0.2');
+  }
+  if (rule) {
+    tl.from(rule, { scaleX: 0, transformOrigin: 'left center', duration: 0.5 }, '-=0.35');
+  }
   if (tabs.length) {
-    tl.from(tabs, { autoAlpha: 0, y: -8, duration: 0.35, stagger: 0.06 }, '-=0.2');
+    tl.from(tabs, { autoAlpha: 0, y: -8, duration: 0.35, stagger: 0.07 }, '-=0.25');
   }
 }
 
 /**
- * 分頁內容進場：把模組頂層的各區塊依序淡入並輕微上移。
+ * 分頁內容進場：把模組頂層的各區塊像分鏡依序淡入、輕微上移並去除微模糊。
  * 換錢模組頂層即為多張 .card；對帳模組頂層只有一個 .rc 殼，因此改取其子層做交錯。
  */
 export function animateModuleIn(main: HTMLElement): void {
@@ -50,13 +62,14 @@ export function animateModuleIn(main: HTMLElement): void {
   gsap.killTweensOf(blocks);
   gsap.from(blocks, {
     autoAlpha: 0,
-    // 受保護的付款分頁區塊位移量為 0（只淡入），其餘區塊上移 14px 帶出層次。
-    y: (_i, target) => (isProtectedBlock(target as Element) ? 0 : 14),
-    duration: 0.4,
-    ease: 'power2.out',
-    stagger: 0.05,
+    // 受保護的付款分頁區塊位移與模糊量為 0（只淡入），其餘區塊上移帶出層次。
+    y: (_i, target) => (isProtectedBlock(target as Element) ? 0 : 18),
+    filter: (_i, target) => (isProtectedBlock(target as Element) ? 'blur(0px)' : 'blur(6px)'),
+    duration: 0.5,
+    ease: 'power3.out',
+    stagger: 0.06,
     // 動畫結束後清掉 inline 樣式，交還給原本的 CSS，受保護區也不殘留任何痕跡。
-    clearProps: 'opacity,visibility,transform',
+    clearProps: 'opacity,visibility,transform,filter',
   });
 }
 
@@ -65,7 +78,30 @@ export function animateTabActivate(btn: HTMLElement): void {
   if (prefersReducedMotion()) return;
   gsap.fromTo(
     btn,
-    { scale: 0.92 },
-    { scale: 1, duration: 0.35, ease: 'back.out(2)', clearProps: 'transform' },
+    { scale: 0.9 },
+    { scale: 1, duration: 0.38, ease: 'back.out(2.4)', clearProps: 'transform' },
+  );
+}
+
+/**
+ * 結果強調：當結論／合計等關鍵字句更新時，做一次明確但短促的高亮脈動，
+ * 讓現場一眼注意到「數字變了」。純外觀，不改任何文字內容。
+ */
+export function pulseElement(el: HTMLElement | null): void {
+  if (!el || prefersReducedMotion()) return;
+  gsap.fromTo(
+    el,
+    { scale: 0.985, filter: 'brightness(1.18)' },
+    { scale: 1, filter: 'brightness(1)', duration: 0.45, ease: 'power2.out', clearProps: 'transform,filter' },
+  );
+}
+
+/** 輸入填入回饋：剛被填上數字的欄位輕輕彈一下，配合「醒目外框」更顯眼。 */
+export function popInput(el: HTMLElement | null): void {
+  if (!el || prefersReducedMotion()) return;
+  gsap.fromTo(
+    el,
+    { scale: 0.94 },
+    { scale: 1, duration: 0.32, ease: 'back.out(3)', clearProps: 'transform' },
   );
 }

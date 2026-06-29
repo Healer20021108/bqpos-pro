@@ -4,6 +4,7 @@
 import { denominations, getStockTargets, unitLabel, type ReserveBoxCount } from '../../core/rules';
 import { formatNT } from '../../core/format';
 import type { Denomination } from '../../core/types';
+import { popInput, pulseElement } from '../../core/animate';
 import { goodExchange, sanitizeCount, type GoodExchangeResult } from './calculate';
 import './exchange.css';
 
@@ -62,13 +63,27 @@ function buildInputs(wrap: HTMLElement): void {
       const u = unitLabel(d);
       const target = getStockTargets(1)[d];
       return `
-        <label class="denom-row">
+        <div class="denom-row" data-row="${d}" data-filled="false">
           <span class="denom-name">${d} 元 <small>（${u}，目標 <span data-target="${d}">${target}</span>）</small></span>
-          <input type="text" inputmode="numeric" pattern="[0-9]*"
-                 data-count="${d}" placeholder="0" aria-label="${d} 元目前數量" />
-        </label>`;
+          <div class="denom-field">
+            <input type="text" inputmode="numeric" pattern="[0-9]*"
+                   data-count="${d}" placeholder="0" aria-label="${d} 元目前數量" />
+            <button type="button" class="denom-clear" data-clear="${d}" aria-label="清除 ${d} 元數量" title="清除">✕</button>
+          </div>
+        </div>`;
     })
     .join('');
+}
+
+// 同步單一輸入列的「已填入」醒目狀態（外框粗體＋亮顯），並回傳是否由空變填（供彈跳回饋）。
+function syncFilled(container: HTMLElement, d: Denomination): boolean {
+  const input = container.querySelector<HTMLInputElement>(`[data-count="${d}"]`);
+  const row = container.querySelector<HTMLElement>(`[data-row="${d}"]`);
+  if (!input || !row) return false;
+  const filled = input.value.trim() !== '';
+  const was = row.dataset.filled === 'true';
+  row.dataset.filled = String(filled);
+  return filled && !was;
 }
 
 function readCounts(container: HTMLElement): Partial<Record<Denomination, string>> {
@@ -164,6 +179,9 @@ export function renderExchange(container: HTMLElement): () => void {
     boxModeNoteEl.textContent = `目前按「${reserveBoxes === 2 ? '兩盒' : '一盒'}備用金＋POS 預留」計算。`;
   }
 
+  let prevConclusion = '';
+  let firstRender = true;
+
   function render(): void {
     const counts = readCounts(container);
     const reserveBoxes = readReserveBoxes();
@@ -174,6 +192,12 @@ export function renderExchange(container: HTMLElement): () => void {
     renderConclusion(conclusionEl, result);
     renderExchangeList(exchangeListEl, exchangeTotalEl, result);
     renderTable(tableBodyEl, result, current);
+
+    // 結論文字一變就脈動一次，現場一眼看到「今日建議變了」（首次渲染不做）。
+    const text = conclusionEl.textContent ?? '';
+    if (!firstRender && text !== prevConclusion) pulseElement(conclusionEl);
+    prevConclusion = text;
+    firstRender = false;
   }
 
   const onInput = (e: Event): void => {
@@ -182,14 +206,35 @@ export function renderExchange(container: HTMLElement): () => void {
     if (target.dataset.count !== undefined) {
       const cleaned = target.value.replace(/\D/g, '');
       if (cleaned !== target.value) target.value = cleaned;
+      const d = Number(target.dataset.count) as Denomination;
+      if (syncFilled(container, d)) popInput(target);
     }
     render();
   };
+
+  // 快速刪除：點該列的 ✕ 立即清空、解除醒目狀態並重算，再把游標留在該欄方便重填。
+  const onClick = (e: Event): void => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+    const clear = target.closest<HTMLElement>('[data-clear]');
+    if (!clear) return;
+    const d = Number(clear.dataset.clear) as Denomination;
+    const input = container.querySelector<HTMLInputElement>(`[data-count="${d}"]`);
+    if (input) {
+      input.value = '';
+      syncFilled(container, d);
+      input.focus();
+    }
+    render();
+  };
+
   container.addEventListener('input', onInput);
+  container.addEventListener('click', onClick);
 
   render();
 
   return () => {
     container.removeEventListener('input', onInput);
+    container.removeEventListener('click', onClick);
   };
 }
