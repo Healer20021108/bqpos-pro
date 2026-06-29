@@ -56,11 +56,34 @@ export function renderUniversal(container: HTMLElement): () => void {
       </div>`;
   }
 
+  // 每頁 11 列，對齊百貨POS的橫向分頁手感。
+  const PAGE_SIZE = 11;
+
+  function paginate(rows: ViewRow[], size: number): ViewRow[][] {
+    const pages: ViewRow[][] = [];
+    for (let i = 0; i < rows.length; i += size) pages.push(rows.slice(i, i + size));
+    return pages.length ? pages : [[]];
+  }
+
   function sectionHtml(title: string, rows: ViewRow[]): string {
+    const pages = paginate(rows, PAGE_SIZE);
+    const multi = pages.length > 1;
+    const pagesHtml = pages
+      .map(
+        (page, i) => `
+          <section class="uv-page" aria-label="第 ${i + 1} 頁，共 ${pages.length} 頁">
+            ${multi ? `<div class="uv-page-number">第 ${i + 1} / ${pages.length} 頁</div>` : ''}
+            <div class="uv-page-rows">${page.map(rowHtml).join('')}</div>
+          </section>`,
+      )
+      .join('');
     return `
       <section class="uv-section">
         <h2 class="uv-section-title">${esc(title)}</h2>
-        <div class="uv-rows">${rows.map(rowHtml).join('')}</div>
+        ${multi ? '<div class="uv-scroll-hint" aria-hidden="true">← 左右滑動換頁 →</div>' : ''}
+        <div class="uv-pages" role="region" aria-label="${esc(title)}，共 ${pages.length} 頁" tabindex="0">
+          ${pagesHtml}
+        </div>
       </section>`;
   }
 

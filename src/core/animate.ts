@@ -19,9 +19,14 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-// 區塊內若含付款分頁，視為受保護區：只能淡入，不可施加任何 transform。
+// 區塊內若含橫向分頁，視為受保護區：只能淡入，不可施加任何 transform，
+// 以免擾動 scroll-snap 的初始排版。涵蓋對帳 .payment-pages 與環球清帳 .uv-pages。
 function isProtectedBlock(el: Element): boolean {
-  return el.matches('.rows') || el.querySelector('.payment-pages') !== null;
+  return (
+    el.matches('.rows') ||
+    el.querySelector('.payment-pages') !== null ||
+    el.querySelector('.uv-pages') !== null
+  );
 }
 
 /** 殼層開場：分頁列像片頭字卡依序落下入場。 */

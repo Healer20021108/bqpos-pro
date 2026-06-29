@@ -55,25 +55,66 @@
   color: var(--muted);
 }
 
-/* 區段（實收款別／實收有價證券） */
+/* 區段（實收款別／實收有價證券）：標題 + 橫向分頁 */
 .uv-section {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 12px;
-  margin-bottom: 14px;
-  box-shadow: var(--shadow-card);
+  margin-bottom: 16px;
 }
 
 .uv-section-title {
-  margin: 2px 2px 10px;
+  margin: 2px 2px 8px;
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0.14em;
   color: var(--accent-ink);
 }
 
-.uv-rows {
+/* 橫向分頁（對齊百貨POS的 .payment-pages 手感） */
+.uv-scroll-hint {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.uv-pages {
+  display: flex;
+  gap: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scrollbar-color: var(--accent-line) var(--bg-2);
+  border-radius: var(--radius-lg);
+}
+
+.uv-pages:focus-visible {
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+
+.uv-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  align-self: stretch;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.uv-page-number {
+  margin: 0 2px 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.uv-page-rows {
   display: grid;
   gap: 6px;
 }
@@ -88,7 +129,7 @@
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--bg-2);
+  background: var(--card);
   transition: background 0.16s var(--ease-out), border-color 0.16s, box-shadow 0.16s;
 }
 
