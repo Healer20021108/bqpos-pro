@@ -57,6 +57,12 @@ describe('環球清帳：百貨POS金額 → 結帳單對應', () => {
     expect(s.appended.every((r) => r.appended)).toBe(true);
   });
 
+  test('金額為 0 的無對應欄位不補列（只補有金額者）', () => {
+    const s = buildSettlement({ full_pay: 0, ue_opened: 0, foodpanda_pending: 430 });
+    expect(s.appended.map((r) => r.label)).toEqual(['外送熊貓未']);
+    expect(s.appended.every((r) => r.amount > 0)).toBe(true);
+  });
+
   test('右欄有價證券對應 + 實收總計＝左＋右＋補列', () => {
     const s = buildSettlement({
       cash: 1000, // 左
