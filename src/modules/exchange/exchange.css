@@ -164,14 +164,13 @@
 table.detail {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
-  min-width: 460px;
+  font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
 }
 
 table.detail th,
 table.detail td {
-  padding: 9px 8px;
+  padding: 8px 4px;
   text-align: right;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
@@ -180,9 +179,7 @@ table.detail td {
 table.detail th {
   color: var(--muted);
   font-weight: 700;
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 0.72rem;
   background: var(--bg-2);
 }
 

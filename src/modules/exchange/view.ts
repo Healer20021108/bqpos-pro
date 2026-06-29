@@ -45,7 +45,7 @@ const TEMPLATE = `
     <div class="table-scroll">
       <table class="detail">
         <thead>
-          <tr><th>面額</th><th>目前</th><th>目標</th><th>精準缺</th><th>好換換</th><th>多出</th></tr>
+          <tr><th>面額</th><th>目前</th><th>目標</th><th>缺少</th><th>好換</th><th>多出</th></tr>
         </thead>
         <tbody data-out="detail-body"></tbody>
       </table>
