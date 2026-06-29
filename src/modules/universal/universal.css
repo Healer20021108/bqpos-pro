@@ -55,102 +55,68 @@
   color: var(--muted);
 }
 
-/* 區段（實收款別／實收有價證券）：標題 + 橫向分頁 */
+/* 兩欄並排：左＝實收款別、右＝實收有價證券（對齊實體結帳單的左右兩欄） */
+.uv-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
 .uv-section {
-  margin-bottom: 16px;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 9px;
+  box-shadow: var(--shadow-card);
 }
 
 .uv-section-title {
   margin: 2px 2px 8px;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: var(--accent-ink);
 }
 
-/* 橫向分頁（對齊百貨POS的 .payment-pages 手感） */
-.uv-scroll-hint {
-  margin: 0 0 6px;
-  color: var(--muted);
-  font-size: 0.72rem;
-  text-align: center;
-}
-
-.uv-pages {
-  display: flex;
-  gap: 10px;
-  max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x mandatory;
-  scrollbar-color: var(--accent-line) var(--bg-2);
-  border-radius: var(--radius-lg);
-}
-
-.uv-pages:focus-visible {
-  outline: 3px solid var(--accent-soft);
-  outline-offset: 2px;
-}
-
-.uv-page {
-  flex: 0 0 100%;
-  min-width: 0;
-  align-self: stretch;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  padding: 12px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-}
-
-.uv-page-number {
-  margin: 0 2px 8px;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-align: right;
-}
-
-.uv-page-rows {
+.uv-rows {
   display: grid;
   gap: 6px;
 }
 
-/* 單列：項目 | 金額 */
+/* 單格：項目在上、金額在下，窄欄也能完整顯示金額 */
 .uv-row {
   display: grid;
-  grid-template-columns: 1fr 128px;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 7px 10px;
+  gap: 4px;
+  padding: 7px 8px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
+  border-radius: 10px;
+  background: var(--bg-2);
   transition: background 0.16s var(--ease-out), border-color 0.16s, box-shadow 0.16s;
 }
 
 .uv-label {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.95rem;
-  font-weight: 600;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 0.8rem;
+  font-weight: 700;
   line-height: 1.25;
+  color: var(--ink-soft);
 }
 
 .uv-amount {
   width: 100%;
   min-width: 0;
-  padding: 9px 11px;
-  font-size: 1.05rem;
+  padding: 7px 9px;
+  font-size: 0.98rem;
   font-weight: 700;
   text-align: right;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--card);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -170,7 +136,6 @@
 }
 
 .uv-row[data-filled='true'] .uv-label {
-  font-weight: 800;
   color: var(--accent-ink);
 }
 
