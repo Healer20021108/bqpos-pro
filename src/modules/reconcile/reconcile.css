@@ -218,6 +218,14 @@
   outline: 3px solid var(--accent-soft);
   outline-offset: 2px;
 }
+.rc .company-payment-list {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
 .rc .payment-page {
   flex: 0 0 100%;
   min-width: 0;
@@ -463,6 +471,53 @@
 }
 .rc .toggle-row[data-on='true'] .switch span {
   transform: translateX(16px);
+}
+
+.rc .custom-piece-row {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 1fr minmax(108px, 132px);
+  align-items: center;
+  gap: 6px 10px;
+  border: 1px dashed var(--line-2);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 9px 10px 9px 12px;
+}
+.rc .custom-piece-row[data-active='true'] {
+  border-style: solid;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.rc .custom-piece-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.rc .custom-piece-row input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink-1);
+  font: inherit;
+  font-weight: 700;
+  text-align: right;
+  padding: 9px 10px;
+}
+.rc .custom-piece-row input:focus {
+  outline: 2px solid var(--accent-line);
+  border-color: var(--accent);
+}
+.rc .custom-piece-state {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.rc .custom-piece-row[data-active='true'] .custom-piece-state {
+  color: var(--accent-ink);
 }
 
 .rc .diff-table {

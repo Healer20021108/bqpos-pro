@@ -89,7 +89,7 @@ export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
     { key: 'simple_pay', label: '簡單付', glyph: '付', active: false },
     { key: 'full_ying_pay', label: '全盈+PAY', glyph: '付', active: false },
   ],
-  // 公司POS —— 23 個欄位，UI 同樣每 11 項直列成一頁。
+  // 公司POS —— 23 個欄位，UI 以單一直欄顯示；有金額的欄位會穩定移到最前方。
   // active:false 僅保留為資料註記，UI 仍固定顯示全部欄位。
   // 數值來源是百貨POS對應項目加總後的結果（見 syncDeptToCompany）。
   company: [
@@ -102,13 +102,13 @@ export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
     { key: 'easycard_pay', label: '悠遊付', glyph: '付' },
     { key: 'px_pay', label: 'PX-Pay', glyph: '付' },
     { key: 'gmpay', label: 'GM Pay', glyph: '付' },
+    { key: 'icash_pay', label: 'icash pay', glyph: '付', active: false },
     { key: 'jkopay', label: '街口支付', glyph: '付' },
     { key: 'easycard_card', label: '悠遊卡', glyph: '卡' },
     { key: 'twpay', label: '台灣Pay', glyph: '付' },
     { key: 'jkopay_offset', label: '街口折抵', glyph: '折' },
     { key: 'foodpanda', label: 'Food panda', glyph: '外' },
     { key: 'ubereats', label: 'Ubereats', glyph: '外' },
-    { key: 'icash_pay', label: 'icash pay', glyph: '付', active: false },
     { key: 'global_points_offset', label: '環球點數折抵', glyph: '折', active: false },
     { key: 'ipass_card', label: '一卡通', glyph: '卡', active: false },
     { key: 'orange_pay', label: '橘子支付', glyph: '付', active: false },

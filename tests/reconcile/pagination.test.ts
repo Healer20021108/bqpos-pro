@@ -30,8 +30,10 @@ describe('付款方式直列分頁', () => {
     ]);
   });
 
-  test('公司 POS 也以相同規則直列分頁', () => {
-    expect(paginate(PAYMENT_GROUPS.company, 11).map((page) => page.length)).toEqual([11, 11, 1]);
+  test('公司 POS 的 icash pay 緊接在 GM Pay 後方', () => {
+    const gmPayIndex = PAYMENT_GROUPS.company.findIndex((field) => field.key === 'gmpay');
+
+    expect(PAYMENT_GROUPS.company[gmPayIndex + 1]?.key).toBe('icash_pay');
   });
 
   test('拒絕無效頁面大小', () => {

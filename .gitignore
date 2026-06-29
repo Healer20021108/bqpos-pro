@@ -26,3 +26,4 @@ yarn-error.log*
 
 # Claude Code 個人本地設定（不共享）
 .claude/settings.local.json
+.gstack/

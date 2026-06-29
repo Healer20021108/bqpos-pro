@@ -9,6 +9,7 @@ import {
   companyToCanonical,
   syncDeptToCompany,
   calculateAdjustments,
+  normalizeProductPieces,
 } from '../../src/modules/reconcile/calculate';
 import { PAYMENT_GROUPS } from '../../src/modules/reconcile/data';
 
@@ -36,6 +37,10 @@ test('findCombination：常用湊不出時，逐步加入可選與最後手段',
   expect(findCombination(5, [42, 47, 57], [], [1, 3, 5])).toEqual([5]);
   expect(findCombination(60, [42, 47, 57], [60], [1, 3, 5])).toEqual([60]);
   expect(findCombination(0, [42], [], [])).toEqual([]);
+});
+
+test('normalizeProductPieces：自訂品項只保留正整數並去重', () => {
+  expect(normalizeProductPieces([60, 60, 0, -5, 12.5, 99, Number.NaN])).toEqual([60, 99]);
 });
 
 test('LinePay：百貨「連線(linepay)＋電子(linepay_electronic)」兩格 → 公司單一 Line Pay（2→1，非 bug）', () => {
@@ -163,6 +168,14 @@ test('對帳：只缺不補（沒有可轉出來源）→ 補結帳', () => {
   expect(r.differences).toEqual({ 現金: 84 });
   expect(r.adjustments).toEqual([
     { kind: 'charge', from: '補結帳', to: '現金', amount: 84, combination: [42, 42] },
+  ]);
+});
+
+test('對帳：自訂品項金額可用於補結帳組合', () => {
+  const r = calculateAdjustments(toNumbers({ cash: 123 }), toNumbers({}), [123, 123, 0, -5, 12.5]);
+  expect(r.differences).toEqual({ 現金: 123 });
+  expect(r.adjustments).toEqual([
+    { kind: 'charge', from: '補結帳', to: '現金', amount: 123, combination: [123] },
   ]);
 });
 

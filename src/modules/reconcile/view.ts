@@ -7,6 +7,7 @@ import {
   calculateAdjustments,
   deptToCanonical,
   companyToCanonical,
+  normalizeProductPieces,
   syncDeptToCompany,
   toNumbers,
 } from './calculate';
@@ -33,6 +34,7 @@ interface State {
   dept: PosState;
   company: PosState;
   enabled: Record<number, boolean>;
+  customPiece: number | '';
   results: ReconcileResult | null;
   history: HistoryEntry[];
   showHistory: boolean;
@@ -111,6 +113,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     dept: {},
     company: {},
     enabled: { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false },
+    customPiece: '',
     results: null,
     history: loadHistory(),
     showHistory: false,
@@ -171,9 +174,7 @@ export function renderReconcile(container: HTMLElement): () => void {
   }
 
   function compute(): void {
-    const enabled = Object.entries(state.enabled)
-      .filter(([, on]) => on)
-      .map(([k]) => parseInt(k, 10));
+    const enabled = getEnabledProductPieces();
     const r = calculateAdjustments(toNumbers(state.dept), toNumbers(state.company), enabled);
     state.results = r;
     if (r.adjustments.length > 0 || Object.keys(r.differences).length > 0) {
@@ -202,6 +203,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     state.results = null;
     state.history = [];
     state.enabled = { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false };
+    state.customPiece = '';
     state.ocrWarn.clear(); // 連同 ⚠️ 標記一起清掉
     state.total = { dept: '', company: '' }; // 清掉總帳
     ocrRun++; // 作廢任何進行中的辨識
@@ -249,9 +251,7 @@ export function renderReconcile(container: HTMLElement): () => void {
   function renderInputs(): void {
     const pos = state.tab;
     const fields = PAYMENT_GROUPS[pos];
-    // 每頁 11 個付款方式，由上往下直列；各頁再放進橫向滑動容器。
     // 手動與 OCR 帶入都寫進同一份 state，因此大於 0 的欄位會套用相同醒目樣式。
-    const pages = paginate(fields, 11);
     const rowHtml = (f: (typeof fields)[number]): string => {
       const filled = hasInput(pos, f.key);
       // ⚠️ 只標在百貨POS：表示這格是 OCR 以「低信心／多張不一致」帶入的，請人工再確認一次。
@@ -265,6 +265,21 @@ export function renderReconcile(container: HTMLElement): () => void {
           </div>
         </div>`;
     };
+
+    if (pos === 'company') {
+      // 公司 POS 不分頁；有金額的欄位優先，兩組內仍維持 PAYMENT_GROUPS 的現場順序。
+      const ordered = [...fields].sort(
+        (a, b) => Number(hasInput(pos, b.key)) - Number(hasInput(pos, a.key)),
+      );
+      els.inputRows.innerHTML = `
+        <section class="company-payment-list" aria-label="公司 POS 付款方式">
+          ${ordered.map(rowHtml).join('')}
+        </section>`;
+      return;
+    }
+
+    // 百貨 POS 欄位較多，維持每頁 11 個付款方式的橫向分頁。
+    const pages = paginate(fields, 11);
     const pagesHtml = pages.map((page, index) => `
       <section class="payment-page" aria-label="第 ${index + 1} 頁，共 ${pages.length} 頁">
         <div class="payment-page-number">第 ${index + 1} / ${pages.length} 頁</div>
@@ -272,13 +287,60 @@ export function renderReconcile(container: HTMLElement): () => void {
       </section>`).join('');
     els.inputRows.innerHTML = `
       <div class="page-scroll-hint" aria-hidden="true">← 左右滑動換頁 →</div>
-      <div class="payment-pages" role="region" aria-label="${pos === 'dept' ? '百貨' : '公司'} POS 付款方式，共 ${pages.length} 頁" tabindex="0">
+      <div class="payment-pages" role="region" aria-label="百貨 POS 付款方式，共 ${pages.length} 頁" tabindex="0">
         ${pagesHtml}
       </div>`;
   }
 
+  function reorderCompanyRows(): void {
+    if (state.tab !== 'company') return;
+    const list = els.inputRows.querySelector<HTMLElement>('.company-payment-list');
+    if (!list) return;
+    const rows = new Map(
+      Array.from(list.querySelectorAll<HTMLElement>('.payment-row')).map((row) => [row.dataset.key, row]),
+    );
+    const ordered = [...PAYMENT_GROUPS.company].sort(
+      (a, b) => Number(hasInput('company', b.key)) - Number(hasInput('company', a.key)),
+    );
+    for (const field of ordered) {
+      const row = rows.get(field.key);
+      if (row) list.append(row);
+    }
+  }
+
+  function getEnabledProductPieces(): number[] {
+    const fixed = Object.entries(state.enabled)
+      .filter(([, on]) => on)
+      .map(([k]) => Number(k));
+    return normalizeProductPieces(state.customPiece === '' ? fixed : [...fixed, state.customPiece]);
+  }
+
+  function customPieceStatus(): string {
+    return state.customPiece === '' ? '空白不啟用' : `${state.customPiece} 元啟用中`;
+  }
+
+  function updateCustomPiece(raw: string, input: HTMLInputElement): void {
+    const value = raw.trim();
+    if (value === '') {
+      state.customPiece = '';
+      input.value = '';
+    } else if (/^\d+$/.test(value)) {
+      const n = Number(value);
+      state.customPiece = Number.isSafeInteger(n) && n > 0 ? n : '';
+      input.value = state.customPiece === '' ? '' : String(state.customPiece);
+    } else {
+      state.customPiece = '';
+      input.value = '';
+    }
+
+    const row = input.closest<HTMLElement>('.custom-piece-row');
+    if (row) row.dataset.active = String(state.customPiece !== '');
+    const status = row?.querySelector<HTMLElement>('[data-out="customPieceStatus"]');
+    if (status) status.textContent = customPieceStatus();
+  }
+
   function renderChips(): void {
-    els.chips.innerHTML = OPTIONAL_PIECES.map(
+    const fixedRows = OPTIONAL_PIECES.map(
       (n) => `
       <button class="toggle-row" data-n="${n}" data-on="${state.enabled[n]}">
         <span class="toggle-text">${n} 元品項</span>
@@ -286,6 +348,20 @@ export function renderReconcile(container: HTMLElement): () => void {
         <span class="switch" aria-hidden="true"><span></span></span>
       </button>`,
     ).join('');
+    els.chips.innerHTML = `${fixedRows}
+      <label class="custom-piece-row" data-active="${state.customPiece !== ''}">
+        <span class="custom-piece-label">自訂金額</span>
+        <input
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          placeholder="輸入金額"
+          aria-label="自訂品項金額"
+          data-act="customPiece"
+          value="${state.customPiece === '' ? '' : state.customPiece}"
+        />
+        <span class="custom-piece-state" data-out="customPieceStatus">${customPieceStatus()}</span>
+      </label>`;
   }
 
   function renderDiff(): void {
@@ -590,6 +666,7 @@ export function renderReconcile(container: HTMLElement): () => void {
         const filled = hasInput(pos, key);
         const row = t.closest<HTMLElement>('.payment-row');
         if (row) row.dataset.filled = String(filled);
+        reorderCompanyRows();
       }
     },
     { signal },
@@ -604,6 +681,16 @@ export function renderReconcile(container: HTMLElement): () => void {
       const n = Number(btn.dataset.n);
       state.enabled[n] = !state.enabled[n];
       render();
+    },
+    { signal },
+  );
+
+  els.chips.addEventListener(
+    'input',
+    (e) => {
+      const input = e.target;
+      if (!(input instanceof HTMLInputElement) || input.dataset.act !== 'customPiece') return;
+      updateCustomPiece(input.value, input);
     },
     { signal },
   );
@@ -638,6 +725,7 @@ export function renderReconcile(container: HTMLElement): () => void {
           if (input) input.value = '';
           row?.querySelector('.warn')?.remove();
           if (row) row.dataset.filled = 'false';
+          reorderCompanyRows();
           renderDynamic();
         }
       } else if (act === 'clearHistory') {

@@ -79,6 +79,20 @@ export function findCombination(
 }
 
 /**
+ * 可選／自訂品項金額只接受正整數，並去重。
+ * 這是 UI 之外的計算層防線，避免小數、負數、0 或重複值影響找組合。
+ */
+export function normalizeProductPieces(pieces: number[]): number[] {
+  return Array.from(
+    new Set(
+      pieces
+        .map((n) => Number(n))
+        .filter((n) => Number.isSafeInteger(n) && n > 0),
+    ),
+  );
+}
+
+/**
  * 「未配對項目」金額：把一側 POS 所有「沒有對應欄位」的付款方式加總成一條比對軸。
  * 算法＝該側全部輸入總額 − 已配對各分類加總（每個欄位最多進一個分類、不重複），
  * 因此日後新增配對會自動從未配對扣掉、新增未配對欄位也會自動納入，不需手動維護清單。
@@ -166,7 +180,7 @@ export function calculateAdjustments(
   const d = deptToCanonical(dept);
   const c = companyToCanonical(company);
   const normal = NORMAL_PIECES;
-  const optional = enabledOptional.slice();
+  const optional = normalizeProductPieces(enabledOptional);
   const lastResort = LAST_RESORT_PIECES;
 
   const diffs: Record<string, number> = {};
