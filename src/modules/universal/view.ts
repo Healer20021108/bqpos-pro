@@ -3,6 +3,7 @@
 
 import { formatNT } from '../../core/format';
 import { loadDeptSnapshot } from '../../core/dept-snapshot';
+import { scheduleDailyReset } from '../../core/daily-memory';
 import { buildSettlement, type SettlementRow } from './calculate';
 import { SECTION_LEFT_TITLE, SECTION_RIGHT_TITLE } from './data';
 import './universal.css';
@@ -18,33 +19,34 @@ function formatSavedAt(iso: string): string {
 }
 
 export function renderUniversal(container: HTMLElement): () => void {
-  const snap = loadDeptSnapshot();
-  const s = buildSettlement(snap.amounts);
-  const rightRows = [...s.right, ...s.appended]; // 自動補列接在右欄外帶自取下方
+  const render = (): void => {
+    const snap = loadDeptSnapshot();
+    const s = buildSettlement(snap.amounts);
+    const rightRows = [...s.right, ...s.appended]; // 自動補列接在右欄外帶自取下方
 
-  const rowHtml = (r: SettlementRow): string => {
-    const filled = r.amount > 0;
-    const tag = r.appended ? '<span class="uv-tag">補</span>' : '';
-    const value = filled ? r.amount.toLocaleString('en-US') : '—';
-    return `
+    const rowHtml = (r: SettlementRow): string => {
+      const filled = r.amount > 0;
+      const tag = r.appended ? '<span class="uv-tag">補</span>' : '';
+      const value = filled ? r.amount.toLocaleString('en-US') : '—';
+      return `
       <div class="uv-row" data-filled="${filled}">
         <span class="uv-label">${esc(r.label)}${tag}</span>
         <span class="uv-amount">${value}</span>
       </div>`;
-  };
+    };
 
-  const sectionHtml = (title: string, rows: SettlementRow[]): string => `
+    const sectionHtml = (title: string, rows: SettlementRow[]): string => `
     <section class="uv-section">
       <h2 class="uv-section-title">${esc(title)}</h2>
       <div class="uv-rows">${rows.map(rowHtml).join('')}</div>
     </section>`;
 
-  const when = formatSavedAt(snap.savedAt);
-  const sub = when
-    ? `照抄用 · 已帶入百貨POS金額 · ${when}`
-    : '尚未在「雙POS對帳」輸入百貨POS金額';
+    const when = formatSavedAt(snap.savedAt);
+    const sub = when
+      ? `照抄用 · 已帶入百貨POS金額 · ${when}`
+      : '尚未在「雙POS對帳」輸入百貨POS金額';
 
-  container.innerHTML = `
+    container.innerHTML = `
     <div class="uv">
       <div class="uv-head">
         <div class="uv-title">環球清帳</div>
@@ -59,6 +61,8 @@ export function renderUniversal(container: HTMLElement): () => void {
         <span class="uv-total-value">${formatNT(s.total)}</span>
       </div>
     </div>`;
+  };
 
-  return () => {};
+  render();
+  return scheduleDailyReset(render);
 }

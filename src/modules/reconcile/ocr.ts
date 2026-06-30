@@ -21,7 +21,7 @@ const CONFIG = {
 };
 
 // 正式環境辨識端點：自家 Netlify Function 代理（見 netlify/functions/ocr.mjs）。
-const OCR_PROXY_ENDPOINT = '/.netlify/functions/ocr';
+const OCR_PROXY_ENDPOINT = '/api/ocr';
 
 interface LabelEntry {
   key: string;
@@ -190,6 +190,14 @@ export interface MergedResult {
   unmatched: UnmatchedItem[];
   conflicts: Conflict[];
   sourceCount: number;
+  quota?: OcrQuotaStatus;
+}
+
+export interface OcrQuotaStatus {
+  dailyLimit: number;
+  weeklyLimit: number;
+  dailyRemaining: number;
+  weeklyRemaining: number;
 }
 
 // Vision API 回傳結構（只取用到的欄位）。
@@ -261,7 +269,10 @@ function resizeImageToBase64(file: File, maxDim: number): Promise<string> {
 // 正式環境：把影像丟給 serverless 代理，由 server 端帶金鑰呼叫 Vision。
 // 本機開發（vite dev）：若 .env 有 VITE_VISION_API_KEY 就直接打 Vision，方便測試。
 //   下面 import.meta.env.DEV 區塊在正式 build 會被整段移除，金鑰不會出現在線上 bundle。
-async function fetchVisionResponse(base64Image: string): Promise<{ responses?: VisionApiResult[] }> {
+async function fetchVisionResponse(base64Image: string): Promise<{
+  responses?: VisionApiResult[];
+  quota?: OcrQuotaStatus;
+}> {
   if (import.meta.env.DEV) {
     const devKey = import.meta.env.VITE_VISION_API_KEY;
     if (devKey) {
@@ -300,12 +311,18 @@ async function fetchVisionResponse(base64Image: string): Promise<{ responses?: V
   return res.json();
 }
 
-async function callVisionAPI(base64Image: string): Promise<FullTextAnnotation | null> {
+async function callVisionAPI(base64Image: string): Promise<{
+  annotation: FullTextAnnotation | null;
+  quota?: OcrQuotaStatus;
+}> {
   const data = await fetchVisionResponse(base64Image);
   const result = data.responses && data.responses[0];
   if (!result) throw new Error('辨識服務沒有回傳結果');
   if (result.error) throw new Error(`Vision API 錯誤：${result.error.message}`);
-  return result.fullTextAnnotation || null; // 沒偵測到文字時為 null，不算錯誤
+  return {
+    annotation: result.fullTextAnnotation || null, // 沒偵測到文字時為 null，不算錯誤
+    quota: data.quota,
+  };
 }
 
 // ── 純邏輯區（不依賴瀏覽器，方便單元測試）───────────────────────────────────
@@ -495,16 +512,20 @@ export async function recognizeAndParse(
   if (!labelMap) throw new Error(`未知的 pos: ${pos}`);
   const fileArray = Array.isArray(files) ? files : [files];
   const perFileResults: ParsedResult[] = [];
+  let latestQuota: OcrQuotaStatus | undefined;
   for (let i = 0; i < fileArray.length; i++) {
     const base64 = await resizeImageToBase64(fileArray[i], CONFIG.maxImageDimension);
-    const annotation = await callVisionAPI(base64);
+    const { annotation, quota } = await callVisionAPI(base64);
+    if (quota) latestQuota = quota;
     if (!annotation) {
       perFileResults.push({ matched: {}, unmatched: [] });
       continue;
     }
     perFileResults.push(parseLines(clusterIntoLines(flattenToChars(annotation)), labelMap));
   }
-  return mergeParsedResults(perFileResults);
+  const merged = mergeParsedResults(perFileResults);
+  if (latestQuota) merged.quota = latestQuota;
+  return merged;
 }
 
 export const ocrConfig = CONFIG;

@@ -14,10 +14,18 @@ import {
 import { recognizeAndParse, ocrConfig, type MergedResult } from './ocr';
 import { paginate } from './pagination';
 import { saveDeptSnapshot } from '../../core/dept-snapshot';
+import { saveCompanySnapshot } from '../../core/company-snapshot';
+import {
+  clearDailyMemory,
+  loadDailyMemory,
+  saveDailyMemory,
+  scheduleDailyReset,
+} from '../../core/daily-memory';
 import type { Adjustment, PosKind, PosState, ReconcileResult } from './types';
 import './reconcile.css';
 
 const HISTORY_KEY = 'posHistoryManualV1';
+const MEMORY_KEY = 'reconcileDailyV1';
 // OCR 抓到的「銷售總金額」存進 state.total（總帳），而非當成付款欄位寫進 state[pos]，
 // 否則會被算進「付款合計」造成重複。用這個保留 key 在 ocrWarn 裡標記總帳的 ⚠️。
 const TOTAL_OCR_KEY = 'sales_total';
@@ -43,6 +51,36 @@ interface State {
   total: Record<PosKind, number | ''>; // 各POS的「總帳」（手動或 OCR 銷售總金額），用來核對付款合計
 }
 
+interface ReconcileMemory {
+  dept: PosState;
+  company: PosState;
+  enabled: Record<number, boolean>;
+  customPiece: number | '';
+  total: Record<PosKind, number | ''>;
+}
+
+const defaultEnabled = (): Record<number, boolean> => ({
+  60: true,
+  65: false,
+  70: false,
+  75: false,
+  80: false,
+  85: false,
+});
+
+function restorePosState(raw: unknown, pos: PosKind): PosState {
+  if (!raw || typeof raw !== 'object') return {};
+  const source = raw as Record<string, unknown>;
+  const restored: PosState = {};
+  for (const field of PAYMENT_GROUPS[pos]) {
+    const value = source[field.key];
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+      restored[field.key] = value;
+    }
+  }
+  return restored;
+}
+
 const TEMPLATE = `
   <div class="rc">
     <div class="navbar">
@@ -52,7 +90,9 @@ const TEMPLATE = `
           <div class="sub">手動輸入 · 自動對帳</div>
         </div>
         <div class="nav-actions">
-          <button class="icon-btn" data-act="clear" title="清空">⌫</button>
+          <button type="button" class="clear-all-btn" data-act="clear" aria-label="清空所有對帳資料">
+            清空全部
+          </button>
         </div>
       </div>
       <div class="total-bar" data-out="totalBar"></div>
@@ -95,11 +135,8 @@ const TEMPLATE = `
 `;
 
 function loadHistory(): HistoryEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') as HistoryEntry[];
-  } catch {
-    return [];
-  }
+  const history = loadDailyMemory<unknown>(HISTORY_KEY);
+  return Array.isArray(history) ? (history as HistoryEntry[]) : [];
 }
 
 function escapeHtml(s: string): string {
@@ -109,17 +146,35 @@ function escapeHtml(s: string): string {
 export function renderReconcile(container: HTMLElement): () => void {
   container.innerHTML = TEMPLATE;
 
+  const memory = loadDailyMemory<Partial<ReconcileMemory>>(MEMORY_KEY);
+  const enabled = defaultEnabled();
+  if (memory?.enabled && typeof memory.enabled === 'object') {
+    for (const amount of OPTIONAL_PIECES) {
+      if (typeof memory.enabled[amount] === 'boolean') enabled[amount] = memory.enabled[amount];
+    }
+  }
+  const savedCustom = memory?.customPiece;
+  const customPiece =
+    typeof savedCustom === 'number' && Number.isSafeInteger(savedCustom) && savedCustom > 0
+      ? savedCustom
+      : '';
+  const savedDeptTotal = memory?.total?.dept;
+  const deptTotal =
+    typeof savedDeptTotal === 'number' && Number.isSafeInteger(savedDeptTotal) && savedDeptTotal >= 0
+      ? savedDeptTotal
+      : '';
+
   const state: State = {
     tab: 'dept',
-    dept: {},
-    company: {},
-    enabled: { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false },
-    customPiece: '',
+    dept: restorePosState(memory?.dept, 'dept'),
+    company: restorePosState(memory?.company, 'company'),
+    enabled,
+    customPiece,
     results: null,
     history: loadHistory(),
     showHistory: false,
     ocrWarn: new Set<string>(),
-    total: { dept: '', company: '' },
+    total: { dept: deptTotal, company: '' },
   };
 
   const q = <T extends HTMLElement = HTMLElement>(sel: string): T =>
@@ -140,6 +195,16 @@ export function renderReconcile(container: HTMLElement): () => void {
     companyCount: q('[data-out="companyCount"]'),
     fileInput: q<HTMLInputElement>('[data-act="ocrFile"]'),
   };
+
+  function saveMemory(): void {
+    saveDailyMemory<ReconcileMemory>(MEMORY_KEY, {
+      dept: state.dept,
+      company: state.company,
+      enabled: state.enabled,
+      customPiece: state.customPiece,
+      total: state.total,
+    });
+  }
 
   // ── 小工具 ────────────────────────────────────────────────────────────
   const val = (pos: PosKind, key: string): string => {
@@ -162,6 +227,8 @@ export function renderReconcile(container: HTMLElement): () => void {
     state[pos][key] = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0);
     // 百貨POS（手填或 OCR 都走這裡）一有變動就存一份金額快照，供「環球清帳」帶入。
     if (pos === 'dept') saveDeptSnapshot(toNumbers(state.dept));
+    else saveCompanySnapshot(toNumbers(state.company));
+    saveMemory();
     renderDynamic();
   }
 
@@ -172,6 +239,8 @@ export function renderReconcile(container: HTMLElement): () => void {
     const next: PosState = {};
     for (const [k, v] of Object.entries(synced)) if (v !== 0) next[k] = v;
     state.company = next;
+    saveCompanySnapshot(toNumbers(state.company));
+    saveMemory();
     state.tab = 'company';
     render();
   }
@@ -190,7 +259,7 @@ export function renderReconcile(container: HTMLElement): () => void {
       };
       state.history = [entry, ...state.history].slice(0, 10);
       try {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history));
+        saveDailyMemory(HISTORY_KEY, state.history);
       } catch {
         /* localStorage 不可用時略過，不影響計算 */
       }
@@ -199,25 +268,27 @@ export function renderReconcile(container: HTMLElement): () => void {
     q('[data-out="resultsAnchor"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function clearAll(): void {
-    if (!confirm('清空所有輸入與歷史記錄？')) return;
+  function resetAll(): void {
     state.dept = {};
     state.company = {};
     saveDeptSnapshot({}); // 連同環球清帳的帶入來源一起清空
+    saveCompanySnapshot({}); // 連同 KK 清帳的帶入來源一起清空
     state.results = null;
     state.history = [];
-    state.enabled = { 60: true, 65: false, 70: false, 75: false, 80: false, 85: false };
+    state.enabled = defaultEnabled();
     state.customPiece = '';
     state.ocrWarn.clear(); // 連同 ⚠️ 標記一起清掉
     state.total = { dept: '', company: '' }; // 清掉總帳
     ocrRun++; // 作廢任何進行中的辨識
     els.ocrReviewArea.innerHTML = ''; // 清掉辨識結果摘要
-    try {
-      localStorage.removeItem(HISTORY_KEY);
-    } catch {
-      /* 略過 */
-    }
+    clearDailyMemory(HISTORY_KEY);
+    clearDailyMemory(MEMORY_KEY);
     render();
+  }
+
+  function clearAll(): void {
+    if (!confirm('清空所有輸入與歷史記錄？')) return;
+    resetAll();
   }
 
   function exportText(): void {
@@ -341,6 +412,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     if (row) row.dataset.active = String(state.customPiece !== '');
     const status = row?.querySelector<HTMLElement>('[data-out="customPieceStatus"]');
     if (status) status.textContent = customPieceStatus();
+    saveMemory();
   }
 
   function renderChips(): void {
@@ -616,6 +688,8 @@ export function renderReconcile(container: HTMLElement): () => void {
         }
       });
       render(); // 重畫表單：帶入值、醒目標示非零欄位、低信心欄位標 ⚠️
+      saveDeptSnapshot(toNumbers(state.dept));
+      saveMemory();
       renderOcrNotice(result, applied, warned);
     } catch (err) {
       if (unmounted || myRun !== ocrRun) return;
@@ -626,8 +700,11 @@ export function renderReconcile(container: HTMLElement): () => void {
 
   // 辨識後的「結果摘要」：純提示，不是確認步驟（值已自動帶入表單）。
   function renderOcrNotice(result: MergedResult, applied: number, warned: number): void {
+    const quotaLine = result.quota
+      ? `<div class="quota">OCR 額度：今日剩餘 <b>${result.quota.dailyRemaining}</b>／${result.quota.dailyLimit}，本週剩餘 <b>${result.quota.weeklyRemaining}</b>／${result.quota.weeklyLimit}</div>`
+      : '';
     if (!applied) {
-      els.ocrReviewArea.innerHTML = '<div class="ocr-review">這 ' + result.sourceCount + ' 張照片沒有辨識到任何已知欄位。</div>';
+      els.ocrReviewArea.innerHTML = `<div class="ocr-review">這 ${result.sourceCount} 張照片沒有辨識到任何已知欄位。${quotaLine}</div>`;
       return;
     }
     const conflictHtml = result.conflicts.length
@@ -639,6 +716,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     els.ocrReviewArea.innerHTML = `
       <div class="ocr-review">
         <div class="title" style="color:var(--pos-up);">已自動帶入 ${applied} 項欄位 ✓${warnLine}</div>
+        ${quotaLine}
         ${conflictHtml}
       </div>`;
   }
@@ -684,6 +762,7 @@ export function renderReconcile(container: HTMLElement): () => void {
       if (!btn) return;
       const n = Number(btn.dataset.n);
       state.enabled[n] = !state.enabled[n];
+      saveMemory();
       render();
     },
     { signal },
@@ -723,6 +802,9 @@ export function renderReconcile(container: HTMLElement): () => void {
         const key = actEl?.dataset.key;
         if (pos && key) {
           state[pos][key] = '';
+          if (pos === 'dept') saveDeptSnapshot(toNumbers(state.dept));
+          else saveCompanySnapshot(toNumbers(state.company));
+          saveMemory();
           if (pos === 'dept') state.ocrWarn.delete(key); // ⚠️ 只屬於百貨POS
           const row = actEl.closest<HTMLElement>('.payment-row');
           const input = row?.querySelector<HTMLInputElement>('input[data-key]');
@@ -734,11 +816,7 @@ export function renderReconcile(container: HTMLElement): () => void {
         }
       } else if (act === 'clearHistory') {
         state.history = [];
-        try {
-          localStorage.removeItem(HISTORY_KEY);
-        } catch {
-          /* 略過 */
-        }
+        clearDailyMemory(HISTORY_KEY);
         render();
       }
     },
@@ -754,6 +832,7 @@ export function renderReconcile(container: HTMLElement): () => void {
       const pos = t.dataset.total as PosKind;
       const v = t.value.trim();
       state.total[pos] = v === '' ? '' : Math.max(0, parseInt(v, 10) || 0);
+      saveMemory();
       // 手動改過總帳＝已人工確認，清掉它的 ⚠️（僅百貨）並即時移除標記。
       if (pos === 'dept' && state.ocrWarn.delete(TOTAL_OCR_KEY)) {
         t.closest('.total-input-wrap')?.querySelector('.warn')?.remove();
@@ -778,8 +857,11 @@ export function renderReconcile(container: HTMLElement): () => void {
 
   render();
 
+  const stopDailyReset = scheduleDailyReset(resetAll);
+
   return () => {
     unmounted = true;
+    stopDailyReset();
     controller.abort();
     container.innerHTML = '';
   };

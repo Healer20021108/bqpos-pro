@@ -1,0 +1,96 @@
+/* KK 清帳：公司 POS 的單欄唯讀清帳表，手機上可由上往下直接照抄。 */
+
+.kk-head {
+  margin-bottom: 12px;
+}
+
+.kk-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.kk-sub {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.kk-sheet {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.kk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.kk-label {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.kk-amount {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kk-row[data-filled='true'] {
+  background: var(--accent-soft);
+}
+
+.kk-row[data-filled='true'] .kk-label {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.kk-row[data-filled='true'] .kk-amount {
+  color: var(--accent-ink);
+  font-size: 1.08rem;
+  font-weight: 850;
+}
+
+.kk-row[data-kind='total'] {
+  background: var(--stage);
+}
+
+.kk-row[data-kind='total'] .kk-label {
+  color: var(--stage-muted);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.kk-row[data-kind='total'] .kk-amount {
+  color: var(--accent);
+  font-size: 1.3rem;
+  font-weight: 850;
+}
+
+.kk-row[data-kind='other'][data-filled='true'] {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.kk-note {
+  margin: 10px 4px 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}

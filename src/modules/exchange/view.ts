@@ -5,12 +5,30 @@ import { denominations, getStockTargets, unitLabel, type ReserveBoxCount } from 
 import { formatNT } from '../../core/format';
 import type { Denomination } from '../../core/types';
 import { popInput, pulseElement } from '../../core/animate';
+import {
+  clearDailyMemory,
+  loadDailyMemory,
+  saveDailyMemory,
+  scheduleDailyReset,
+} from '../../core/daily-memory';
 import { goodExchange, sanitizeCount, type GoodExchangeResult } from './calculate';
 import './exchange.css';
 
+const MEMORY_KEY = 'exchangeDailyV1';
+
+interface ExchangeMemory {
+  counts: Partial<Record<Denomination, string>>;
+  reserveBoxes: ReserveBoxCount;
+}
+
 const TEMPLATE = `
   <section class="card">
-    <h2>目前各幣值數量</h2>
+    <div class="card-heading-row">
+      <h2>目前各幣值數量</h2>
+      <button type="button" class="clear-all-btn" data-clear-all aria-label="清空所有換錢數量">
+        清空全部
+      </button>
+    </div>
     <p class="hint">數一數每種面額目前總共有多少，填進去即可。</p>
     <div class="denoms" data-inputs="count"></div>
   </section>
@@ -159,6 +177,19 @@ export function renderExchange(container: HTMLElement): () => void {
 
   buildInputs(container.querySelector<HTMLElement>('[data-inputs="count"]')!);
 
+  const memory = loadDailyMemory<Partial<ExchangeMemory>>(MEMORY_KEY);
+  for (const d of denominations) {
+    const saved = memory?.counts?.[d];
+    const input = container.querySelector<HTMLInputElement>(`[data-count="${d}"]`);
+    if (input && typeof saved === 'string' && /^\d+$/.test(saved)) input.value = saved;
+    syncFilled(container, d);
+  }
+  const savedBoxes = memory?.reserveBoxes === 2 ? '2' : '1';
+  const savedBoxInput = container.querySelector<HTMLInputElement>(
+    `input[name="reserve-boxes"][value="${savedBoxes}"]`,
+  );
+  if (savedBoxInput) savedBoxInput.checked = true;
+
   const conclusionEl = container.querySelector<HTMLElement>('[data-out="conclusion"]')!;
   const exchangeListEl = container.querySelector<HTMLElement>('[data-out="exchange-list"]')!;
   const exchangeTotalEl = container.querySelector<HTMLElement>('[data-out="exchange-total"]')!;
@@ -168,6 +199,13 @@ export function renderExchange(container: HTMLElement): () => void {
   function readReserveBoxes(): ReserveBoxCount {
     const checked = container.querySelector<HTMLInputElement>('input[name="reserve-boxes"]:checked');
     return checked?.value === '2' ? 2 : 1;
+  }
+
+  function saveMemory(): void {
+    saveDailyMemory<ExchangeMemory>(MEMORY_KEY, {
+      counts: readCounts(container),
+      reserveBoxes: readReserveBoxes(),
+    });
   }
 
   function renderTargets(reserveBoxes: ReserveBoxCount): void {
@@ -210,12 +248,33 @@ export function renderExchange(container: HTMLElement): () => void {
       if (syncFilled(container, d)) popInput(target);
     }
     render();
+    saveMemory();
   };
 
   // 快速刪除：點該列的 ✕ 立即清空、解除醒目狀態並重算，再把游標留在該欄方便重填。
   const onClick = (e: Event): void => {
     const target = e.target;
     if (!(target instanceof HTMLElement)) return;
+
+    const clearAll = target.closest<HTMLElement>('[data-clear-all]');
+    if (clearAll) {
+      const hasInput = denominations.some((d) => {
+        const input = container.querySelector<HTMLInputElement>(`[data-count="${d}"]`);
+        return input?.value.trim() !== '';
+      });
+      if (!hasInput || !confirm('清空所有換錢數量？')) return;
+
+      for (const d of denominations) {
+        const input = container.querySelector<HTMLInputElement>(`[data-count="${d}"]`);
+        if (input) input.value = '';
+        syncFilled(container, d);
+      }
+      render();
+      saveMemory();
+      container.querySelector<HTMLInputElement>('[data-count]')?.focus();
+      return;
+    }
+
     const clear = target.closest<HTMLElement>('[data-clear]');
     if (!clear) return;
     const d = Number(clear.dataset.clear) as Denomination;
@@ -226,6 +285,7 @@ export function renderExchange(container: HTMLElement): () => void {
       input.focus();
     }
     render();
+    saveMemory();
   };
 
   container.addEventListener('input', onInput);
@@ -233,7 +293,20 @@ export function renderExchange(container: HTMLElement): () => void {
 
   render();
 
+  const stopDailyReset = scheduleDailyReset(() => {
+    clearDailyMemory(MEMORY_KEY);
+    for (const d of denominations) {
+      const input = container.querySelector<HTMLInputElement>(`[data-count="${d}"]`);
+      if (input) input.value = '';
+      syncFilled(container, d);
+    }
+    const defaultBox = container.querySelector<HTMLInputElement>('input[name="reserve-boxes"][value="1"]');
+    if (defaultBox) defaultBox.checked = true;
+    render();
+  });
+
   return () => {
+    stopDailyReset();
     container.removeEventListener('input', onInput);
     container.removeEventListener('click', onClick);
   };

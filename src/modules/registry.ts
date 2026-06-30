@@ -8,5 +8,6 @@ import type { FeatureModule } from '../core/types';
 import exchangeModule from './exchange';
 import reconcileModule from './reconcile';
 import universalModule from './universal';
+import kkModule from './kk';
 
-export const modules: FeatureModule[] = [exchangeModule, reconcileModule, universalModule];
+export const modules: FeatureModule[] = [exchangeModule, reconcileModule, universalModule, kkModule];

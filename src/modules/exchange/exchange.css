@@ -7,6 +7,22 @@
   font-size: 0.85rem;
 }
 
+.card-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.card-heading-row h2 {
+  margin: 0;
+}
+
+.card-heading-row + .hint {
+  margin-top: 0;
+}
+
 .reserve-box-control {
   margin: 0 0 16px;
   padding: 0 0 16px;

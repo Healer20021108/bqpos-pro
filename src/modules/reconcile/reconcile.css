@@ -330,6 +330,10 @@
   font-weight: 600;
   margin-bottom: 6px;
 }
+.rc .ocr-review .quota {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
 .rc .ocr-review .conflict {
   background: #fff3cd;
   border-radius: 8px;

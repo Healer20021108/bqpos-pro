@@ -20,5 +20,5 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src", "tests", "vite.config.ts"]
+  "include": ["src", "tests", "netlify/functions/ocr-quota.ts", "vite.config.ts"]
 }
