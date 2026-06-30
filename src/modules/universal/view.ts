@@ -50,6 +50,7 @@ export function renderUniversal(container: HTMLElement): () => void {
     <div class="uv">
       <div class="uv-head">
         <div class="uv-title">環球清帳</div>
+        <div class="uv-store-meta">專櫃編號：21031／收銀機台號：660085</div>
         <div class="uv-sub">${sub}</div>
       </div>
       <div class="uv-columns">
