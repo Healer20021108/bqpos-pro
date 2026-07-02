@@ -9,5 +9,12 @@ import exchangeModule from './exchange';
 import reconcileModule from './reconcile';
 import universalModule from './universal';
 import kkModule from './kk';
+import inventoryModule from './inventory';
 
-export const modules: FeatureModule[] = [exchangeModule, reconcileModule, universalModule, kkModule];
+export const modules: FeatureModule[] = [
+  exchangeModule,
+  reconcileModule,
+  universalModule,
+  kkModule,
+  inventoryModule,
+];

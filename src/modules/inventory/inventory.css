@@ -1,0 +1,264 @@
+.inventory-head {
+  margin-bottom: 12px;
+}
+
+.inventory-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.inventory-sub {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+/* ---- 品項清單 ---- */
+
+.inv-list {
+  display: grid;
+  gap: 10px;
+}
+
+.inv-card {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg-2);
+}
+
+.inv-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.inv-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent-ink);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.inv-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+  flex: 1;
+  min-width: 0;
+}
+
+.inv-pcode {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.inv-field {
+  display: grid;
+  gap: 3px;
+}
+
+.inv-field-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.inv-field-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.inv-field-unit {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.inv-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.inv-field input:focus {
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.inv-field-hint {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.25;
+}
+
+.inv-card-out {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--line);
+}
+
+.inv-result {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.inv-result.is-filled {
+  color: var(--accent-ink);
+}
+
+.inv-pending {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--warn-bg, #fff4e5);
+  color: var(--warn-ink, #9a5b00);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.inv-clear-all {
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--bg-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 5px 10px;
+}
+
+/* ---- 對照表 ---- */
+
+.inv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.inv-table th,
+.inv-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-table th:first-child,
+.inv-table td:first-child {
+  text-align: left;
+}
+
+.inv-table thead th {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.inv-table tr[data-filled='false'] td {
+  color: var(--muted);
+}
+
+.inv-tcode {
+  display: inline-block;
+  min-width: 16px;
+  margin-right: 5px;
+  color: var(--accent-ink);
+  font-weight: 800;
+}
+
+.inv-flag {
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--warn-bg, #fff4e5);
+  color: var(--warn-ink, #9a5b00);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+/* ---- 匯出 ---- */
+
+.inv-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.inv-btn {
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.inv-btn.primary {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+
+.inv-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.inv-status {
+  margin: 10px 2px 0;
+  min-height: 1.2em;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.inv-status.ok {
+  color: var(--ok-ink, #1a7f4b);
+}
+
+.inv-status.error {
+  color: var(--danger-ink, #c0392b);
+}
+
+.inv-status.busy {
+  color: var(--muted);
+}
+
+.inv-status a {
+  color: var(--accent-ink);
+}

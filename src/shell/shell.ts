@@ -71,7 +71,11 @@ export function createShell(root: HTMLElement, mods: FeatureModule[]): () => voi
       const selected = bid === mod.id;
       btn.setAttribute('aria-selected', String(selected));
       btn.classList.toggle('is-active', selected);
-      if (selected) animateTabActivate(btn);
+      if (selected) {
+        animateTabActivate(btn);
+        // 分頁多於手機寬度時，確保目前分頁不會藏在橫向捲動區外。
+        btn.scrollIntoView({ block: 'nearest', inline: 'center' });
+      }
     }
     main.scrollTop = 0;
 
