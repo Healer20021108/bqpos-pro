@@ -10,6 +10,7 @@ import {
   syncDeptToCompany,
   calculateAdjustments,
   normalizeProductPieces,
+  orderCompanyFieldKeys,
 } from '../../src/modules/reconcile/calculate';
 import { PAYMENT_GROUPS } from '../../src/modules/reconcile/data';
 
@@ -41,6 +42,16 @@ test('findCombination：常用湊不出時，逐步加入可選與最後手段',
 
 test('normalizeProductPieces：自訂品項只保留正整數並去重', () => {
   expect(normalizeProductPieces([60, 60, 0, -5, 12.5, 99, Number.NaN])).toEqual([60, 99]);
+});
+
+test('公司 POS：同步置頂的款別即使金額被刪除也保留原位', () => {
+  const ordered = orderCompanyFieldKeys(
+    ['cash', 'voucher', 'credit', 'linepay'],
+    { cash: '', voucher: '', credit: '', linepay: 500 },
+    ['credit', 'linepay'],
+  );
+
+  expect(ordered).toEqual(['credit', 'linepay', 'cash', 'voucher']);
 });
 
 test('LinePay：百貨「連線(linepay)＋電子(linepay_electronic)」兩格 → 公司單一 Line Pay（2→1，非 bug）', () => {

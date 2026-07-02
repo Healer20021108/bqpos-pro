@@ -1,9 +1,9 @@
-// KK 清帳 UI：讀取公司 POS 快照，呈現單欄唯讀清帳資料。
+// KK 清帳 UI：直接讀取百貨 POS 快照，呈現單欄唯讀清帳資料。
 
-import { loadCompanySnapshot } from '../../core/company-snapshot';
+import { loadDeptSnapshot } from '../../core/dept-snapshot';
 import { scheduleDailyReset } from '../../core/daily-memory';
 import { formatNT } from '../../core/format';
-import { buildKkSettlement } from './calculate';
+import { buildKkSettlementFromDept } from './calculate';
 import './kk.css';
 
 function formatSavedAt(iso: string): string {
@@ -21,12 +21,12 @@ function formatSavedAt(iso: string): string {
 
 export function renderKk(container: HTMLElement): () => void {
   const render = (): void => {
-    const snapshot = loadCompanySnapshot();
-    const settlement = buildKkSettlement(snapshot.amounts);
+    const snapshot = loadDeptSnapshot();
+    const settlement = buildKkSettlementFromDept(snapshot.amounts);
     const when = formatSavedAt(snapshot.savedAt);
     const subtitle = when
-      ? `已帶入公司 POS 金額 · ${when}`
-      : '尚未在「雙POS對帳」輸入公司 POS 金額';
+      ? `已即時帶入百貨 POS 金額 · ${when}`
+      : '尚未在「雙POS對帳」輸入百貨 POS 金額';
 
     const rows = settlement.rows
       .map((row) => {

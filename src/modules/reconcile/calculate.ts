@@ -29,6 +29,25 @@ export function toNumbers(state: Record<string, number | ''>): PosNumbers {
 }
 
 /**
+ * 公司 POS 欄位排序：目前有金額，或曾由「同步百貨POS金額」帶入的款別置頂。
+ * 保留原始欄位順序，並讓同步款別在金額暫時清空時不會掉回下方。
+ */
+export function orderCompanyFieldKeys(
+  fieldKeys: readonly string[],
+  company: Record<string, number | ''>,
+  syncedKeys: readonly string[],
+): string[] {
+  const synced = new Set(syncedKeys);
+  const isPrioritized = (key: string): boolean => {
+    const value = company[key];
+    return synced.has(key) || (typeof value === 'number' && value > 0);
+  };
+  return [...fieldKeys].sort(
+    (a, b) => Number(isPrioritized(b)) - Number(isPrioritized(a)),
+  );
+}
+
+/**
  * 用最少張數，從 amounts 裡湊出 target（完全背包 / DP）。
  * 湊不出來回傳 null；target 為 0 回傳 []。
  */

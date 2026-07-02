@@ -10,6 +10,7 @@ import {
   normalizeProductPieces,
   syncDeptToCompany,
   toNumbers,
+  orderCompanyFieldKeys,
 } from './calculate';
 import { recognizeAndParse, ocrConfig, type MergedResult } from './ocr';
 import { paginate } from './pagination';
@@ -49,6 +50,7 @@ interface State {
   showHistory: boolean;
   ocrWarn: Set<string>; // 由「信心不足／多張不一致」的 OCR 帶入的百貨POS欄位，列旁顯示 ⚠️
   total: Record<PosKind, number | ''>; // 各POS的「總帳」（手動或 OCR 銷售總金額），用來核對付款合計
+  companyPinnedKeys: Set<string>; // 最後一次同步有帶入的公司 POS 款別，清空金額後仍保持置頂
 }
 
 interface ReconcileMemory {
@@ -57,6 +59,7 @@ interface ReconcileMemory {
   enabled: Record<number, boolean>;
   customPiece: number | '';
   total: Record<PosKind, number | ''>;
+  companyPinnedKeys: string[];
 }
 
 const defaultEnabled = (): Record<number, boolean> => ({
@@ -79,6 +82,19 @@ function restorePosState(raw: unknown, pos: PosKind): PosState {
     }
   }
   return restored;
+}
+
+function restoreCompanyPinnedKeys(raw: unknown, company: PosState): Set<string> {
+  const validKeys = new Set(PAYMENT_GROUPS.company.map((field) => field.key));
+  if (Array.isArray(raw)) {
+    return new Set(raw.filter((key): key is string => typeof key === 'string' && validKeys.has(key)));
+  }
+  // 舊版本尚未儲存置頂清單，以已存的非零款別作為一次性遷移。
+  return new Set(
+    Object.entries(company)
+      .filter(([, value]) => typeof value === 'number' && value > 0)
+      .map(([key]) => key),
+  );
 }
 
 const TEMPLATE = `
@@ -163,11 +179,12 @@ export function renderReconcile(container: HTMLElement): () => void {
     typeof savedDeptTotal === 'number' && Number.isSafeInteger(savedDeptTotal) && savedDeptTotal >= 0
       ? savedDeptTotal
       : '';
+  const restoredCompany = restorePosState(memory?.company, 'company');
 
   const state: State = {
     tab: 'dept',
     dept: restorePosState(memory?.dept, 'dept'),
-    company: restorePosState(memory?.company, 'company'),
+    company: restoredCompany,
     enabled,
     customPiece,
     results: null,
@@ -175,6 +192,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     showHistory: false,
     ocrWarn: new Set<string>(),
     total: { dept: deptTotal, company: '' },
+    companyPinnedKeys: restoreCompanyPinnedKeys(memory?.companyPinnedKeys, restoredCompany),
   };
 
   const q = <T extends HTMLElement = HTMLElement>(sel: string): T =>
@@ -203,6 +221,7 @@ export function renderReconcile(container: HTMLElement): () => void {
       enabled: state.enabled,
       customPiece: state.customPiece,
       total: state.total,
+      companyPinnedKeys: [...state.companyPinnedKeys],
     });
   }
 
@@ -239,6 +258,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     const next: PosState = {};
     for (const [k, v] of Object.entries(synced)) if (v !== 0) next[k] = v;
     state.company = next;
+    state.companyPinnedKeys = new Set(Object.keys(next));
     saveCompanySnapshot(toNumbers(state.company));
     saveMemory();
     state.tab = 'company';
@@ -279,6 +299,7 @@ export function renderReconcile(container: HTMLElement): () => void {
     state.customPiece = '';
     state.ocrWarn.clear(); // 連同 ⚠️ 標記一起清掉
     state.total = { dept: '', company: '' }; // 清掉總帳
+    state.companyPinnedKeys.clear();
     ocrRun++; // 作廢任何進行中的辨識
     els.ocrReviewArea.innerHTML = ''; // 清掉辨識結果摘要
     clearDailyMemory(HISTORY_KEY);
@@ -342,10 +363,13 @@ export function renderReconcile(container: HTMLElement): () => void {
     };
 
     if (pos === 'company') {
-      // 公司 POS 不分頁；有金額的欄位優先，兩組內仍維持 PAYMENT_GROUPS 的現場順序。
-      const ordered = [...fields].sort(
-        (a, b) => Number(hasInput(pos, b.key)) - Number(hasInput(pos, a.key)),
-      );
+      // 公司 POS 不分頁；有金額或曾由同步帶入的欄位優先，清空後仍原地等待輸入。
+      const byKey = new Map(fields.map((field) => [field.key, field]));
+      const ordered = orderCompanyFieldKeys(
+        fields.map((field) => field.key),
+        state.company,
+        [...state.companyPinnedKeys],
+      ).map((key) => byKey.get(key)!);
       els.inputRows.innerHTML = `
         <section class="company-payment-list" aria-label="公司 POS 付款方式">
           ${ordered.map(rowHtml).join('')}
@@ -374,11 +398,13 @@ export function renderReconcile(container: HTMLElement): () => void {
     const rows = new Map(
       Array.from(list.querySelectorAll<HTMLElement>('.payment-row')).map((row) => [row.dataset.key, row]),
     );
-    const ordered = [...PAYMENT_GROUPS.company].sort(
-      (a, b) => Number(hasInput('company', b.key)) - Number(hasInput('company', a.key)),
+    const orderedKeys = orderCompanyFieldKeys(
+      PAYMENT_GROUPS.company.map((field) => field.key),
+      state.company,
+      [...state.companyPinnedKeys],
     );
-    for (const field of ordered) {
-      const row = rows.get(field.key);
+    for (const key of orderedKeys) {
+      const row = rows.get(key);
       if (row) list.append(row);
     }
   }

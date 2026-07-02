@@ -1,6 +1,7 @@
-// KK 清帳核心：把公司 POS 金額整理成單欄清帳表。純函式、無 DOM／儲存副作用。
+// KK 清帳核心：把 POS 金額整理成單欄清帳表。純函式、無 DOM／儲存副作用。
 
 import { PAYMENT_GROUPS } from '../reconcile/data';
+import { syncDeptToCompany } from '../reconcile/calculate';
 
 export type KkRowKind =
   | 'total'
@@ -59,4 +60,12 @@ export function buildKkSettlement(amounts: Record<string, number>): KkSettlement
   ];
 
   return { rows, total, other };
+}
+
+/**
+ * 直接將百貨 POS 金額依對帳規則轉成 KK 清帳。
+ * 不依賴使用者先按「同步百貨POS金額」寫入公司 POS。
+ */
+export function buildKkSettlementFromDept(dept: Record<string, number>): KkSettlement {
+  return buildKkSettlement(syncDeptToCompany(dept));
 }

@@ -1,10 +1,42 @@
 import { describe, expect, test } from 'vitest';
-import { buildKkSettlement, type KkRowKind } from '../../src/modules/kk/calculate';
+import {
+  buildKkSettlement,
+  buildKkSettlementFromDept,
+  type KkRowKind,
+} from '../../src/modules/kk/calculate';
 
 const amount = (rows: ReturnType<typeof buildKkSettlement>['rows'], kind: KkRowKind): number =>
   rows.find((row) => row.kind === kind)?.amount ?? -1;
 
-describe('KK清帳：公司POS金額 → 單欄清帳表', () => {
+describe('KK清帳：POS金額 → 單欄清帳表', () => {
+  test('未同步公司 POS 時，直接使用百貨 POS 金額', () => {
+    const result = buildKkSettlementFromDept({
+      cash: 1000,
+      credit_card: 1200,
+      credit_card_offline: 300,
+      linepay: 400,
+      linepay_electronic: 50,
+      ipass_money_app: 200,
+      easycard_card: 100,
+      jingcheng_discount: 80,
+      cash_voucher: 20,
+      product_voucher: 30,
+      foodpanda_pending: 60,
+      ubereats_pending: 70,
+      jkopay: 90,
+    });
+
+    expect(result.total).toBe(3600);
+    expect(amount(result.rows, 'cash')).toBe(1000);
+    expect(amount(result.rows, 'credit')).toBe(1500);
+    expect(amount(result.rows, 'lineIpAss')).toBe(650);
+    expect(amount(result.rows, 'easycard')).toBe(100);
+    expect(amount(result.rows, 'voucher')).toBe(130);
+    expect(amount(result.rows, 'panda')).toBe(60);
+    expect(amount(result.rows, 'uber')).toBe(70);
+    expect(amount(result.rows, 'other')).toBe(90);
+  });
+
   test('同名款別直接對應', () => {
     const result = buildKkSettlement({
       cash: 1000,
