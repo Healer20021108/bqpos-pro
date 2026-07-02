@@ -395,6 +395,9 @@ export function renderReconcile(container: HTMLElement): () => void {
     if (state.tab !== 'company') return;
     const list = els.inputRows.querySelector<HTMLElement>('.company-payment-list');
     if (!list) return;
+    // 使用者正在某格輸入時絕不重排：搬動含焦點的 input 會讓它失焦，手機上鍵盤會被收起。
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement && list.contains(active)) return;
     const rows = new Map(
       Array.from(list.querySelectorAll<HTMLElement>('.payment-row')).map((row) => [row.dataset.key, row]),
     );
@@ -774,7 +777,8 @@ export function renderReconcile(container: HTMLElement): () => void {
         const filled = hasInput(pos, key);
         const row = t.closest<HTMLElement>('.payment-row');
         if (row) row.dataset.filled = String(filled);
-        reorderCompanyRows();
+        // 不在打字中重排公司POS的列：搬動含焦點的列會讓 input 失焦、手機收起鍵盤。
+        // 「已填優先」的排序改在整頁重畫時套用（切分頁／同步／計算），見 renderInputs。
       }
     },
     { signal },
