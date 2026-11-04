@@ -31,7 +31,8 @@
 }
 
 .rc .num,
-.rc input[type='number'] {
+.rc input[type='number'],
+.rc input.amount-input {
   font-family: 'Inter', 'SF Pro Text', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
@@ -236,10 +237,12 @@
   box-shadow: 0 0 0 3px oklch(0.66 0.16 55 / 0.12);
 }
 .rc .payment-row[data-filled='true'] .payment-label,
-.rc .payment-row[data-filled='true'] input[type='number'] {
+.rc .payment-row[data-filled='true'] input[type='number'],
+.rc .payment-row[data-filled='true'] input.amount-input {
   font-weight: 800;
 }
-.rc .payment-row[data-filled='true'] input[type='number'] {
+.rc .payment-row[data-filled='true'] input[type='number'],
+.rc .payment-row[data-filled='true'] input.amount-input {
   border: 2px solid var(--accent);
   background: var(--surface);
   color: var(--accent-ink);
@@ -269,6 +272,53 @@
 }
 .rc .payment-label .warn {
   cursor: help;
+}
+
+/* 百貨POS列：多筆金額用空格相加，輸入格加寬；下方小字放公司參考金額、＝帶入、合計。 */
+.rc .dept-row input.amount-input {
+  width: 128px;
+}
+.rc .row-hint {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: -2px;
+  padding-left: 35px; /* 對齊款別名稱（glyph 28px＋間距 7px） */
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+.rc .row-hint .ref-text {
+  font-variant-numeric: tabular-nums;
+}
+.rc .fill-btn {
+  border: 1px solid var(--accent-line);
+  background: var(--surface);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  min-height: 28px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rc .fill-btn:active {
+  background: var(--accent-soft);
+}
+.rc .row-hint .sum-text {
+  font-weight: 700;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+.rc .row-hint .sum-text.bad {
+  color: var(--pos-down);
+}
+.rc .inline-sync[data-single='true'] {
+  grid-template-columns: 1fr;
 }
 
 .rc .rows-empty {
@@ -394,7 +444,8 @@
   flex-shrink: 0;
   font-size: 14px;
 }
-.rc input[type='number'] {
+.rc input[type='number'],
+.rc input.amount-input {
   width: 96px;
   padding: 7px 10px;
   text-align: right;
@@ -413,7 +464,8 @@
   -webkit-appearance: none;
   margin: 0;
 }
-.rc input[type='number']:focus {
+.rc input[type='number']:focus,
+.rc input.amount-input:focus {
   border-color: var(--accent);
   background: var(--surface);
   box-shadow: 0 0 0 3px var(--accent-soft);

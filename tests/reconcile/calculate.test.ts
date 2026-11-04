@@ -12,8 +12,12 @@ import {
   calculateAdjustments,
   normalizeProductPieces,
   orderCompanyFieldKeys,
+  parseAmountInput,
+  deptOrderFromCompany,
+  mergeDeptShown,
+  companyRefByDeptKey,
 } from '../../src/modules/reconcile/calculate';
-import { PAYMENT_GROUPS } from '../../src/modules/reconcile/data';
+import { PAYMENT_GROUPS, COMPANY_TO_DEPT } from '../../src/modules/reconcile/data';
 
 test('toNumbers：空字串／缺值正規化為 0，數字原樣保留', () => {
   expect(toNumbers({ a: '', b: 3, c: 0 })).toEqual({ a: 0, b: 3, c: 0 });
@@ -308,14 +312,82 @@ test('新版百貨POS 2026-10 實拍數字：各款別加總＝銷售總金額 4
   expect(synced.global_points_offset).toBe(93);
 });
 
-test('orderDeptFieldKeys：有金額的排最前、剛加入還沒填的在後，未加入且沒金額的不顯示', () => {
+test('orderDeptFieldKeys：已排好／加入的列順序固定（填了金額也不跳位），其他有金額的接在後面', () => {
   const fields = ['cash', 'credit_card_citi', 'linepay', 'jkopay', 'pi_wallet'];
   // 使用者先加了 linepay、jkopay；cash 是 OCR 帶入（有金額但沒按過加入）。
   const order = orderDeptFieldKeys(fields, { cash: 100, jkopay: 280, linepay: '' }, ['linepay', 'jkopay']);
-  expect(order).toEqual(['jkopay', 'cash', 'linepay']);
+  expect(order).toEqual(['linepay', 'jkopay', 'cash']);
 });
 
-test('orderDeptFieldKeys：忽略無效 key 與重複，金額 0 視為沒填', () => {
-  const order = orderDeptFieldKeys(['cash', 'jkopay'], { cash: 0, jkopay: 5 }, ['nope', 'cash', 'cash']);
-  expect(order).toEqual(['jkopay', 'cash']);
+test('orderDeptFieldKeys：忽略無效 key 與重複；未加入且沒金額的不顯示', () => {
+  const order = orderDeptFieldKeys(['cash', 'jkopay', 'linepay'], { cash: 0, jkopay: 5 }, ['nope', 'cash', 'cash']);
+  expect(order).toEqual(['cash', 'jkopay']);
+});
+
+test('parseAmountInput：空白→空值；單筆金額原樣', () => {
+  expect(parseAmountInput('')).toEqual({ value: '', parts: 0, valid: true });
+  expect(parseAmountInput('   ')).toEqual({ value: '', parts: 0, valid: true });
+  expect(parseAmountInput('32150')).toEqual({ value: 32150, parts: 1, valid: true });
+});
+
+test('parseAmountInput：空格或＋代表相加（含全形、多個空格、頭尾空白）', () => {
+  expect(parseAmountInput('12000 6400')).toEqual({ value: 18400, parts: 2, valid: true });
+  expect(parseAmountInput('12000+6400')).toEqual({ value: 18400, parts: 2, valid: true });
+  expect(parseAmountInput(' 100  200＋300 ')).toEqual({ value: 600, parts: 3, valid: true });
+  expect(parseAmountInput('１２０００　６４００')).toEqual({ value: 18400, parts: 2, valid: true });
+  expect(parseAmountInput('12000 ')).toEqual({ value: 12000, parts: 1, valid: true }); // 打到一半的尾端空格
+});
+
+test('parseAmountInput：千分位逗號忽略', () => {
+  expect(parseAmountInput('18,400')).toEqual({ value: 18400, parts: 1, valid: true });
+});
+
+test('parseAmountInput：小數、負數、文字一律整格無效（0）', () => {
+  expect(parseAmountInput('100.5')).toMatchObject({ value: 0, valid: false });
+  expect(parseAmountInput('100 -50')).toMatchObject({ value: 0, valid: false });
+  expect(parseAmountInput('100 abc')).toMatchObject({ value: 0, valid: false });
+  expect(parseAmountInput('99999999999999999999')).toMatchObject({ value: 0, valid: false });
+});
+
+test('deptOrderFromCompany：依公司金額由高到低排出百貨列，0／空白不排，同額維持欄位順序', () => {
+  const companyKeys = PAYMENT_GROUPS.company.map((f) => f.key);
+  const order = deptOrderFromCompany(
+    { cash: 32150, credit: 18400, linepay: 5200, jkopay: 5200, foodpanda: 0, px_pay: 900 },
+    companyKeys,
+    COMPANY_TO_DEPT,
+  );
+  expect(order).toEqual(['cash', 'credit_card', 'linepay', 'jkopay', 'full_pay']);
+});
+
+test('deptOrderFromCompany：沒有百貨對應的款別（加價購）不排', () => {
+  const companyKeys = PAYMENT_GROUPS.company.map((f) => f.key);
+  expect(deptOrderFromCompany({ add_purchase: 500, cash: 100 }, companyKeys, COMPANY_TO_DEPT)).toEqual(['cash']);
+  expect(deptOrderFromCompany({}, companyKeys, COMPANY_TO_DEPT)).toEqual([]);
+});
+
+test('mergeDeptShown：同步順序在前，原本自行加入的列接在後面且不重複', () => {
+  expect(mergeDeptShown(['cash', 'credit_card'], ['credit_card', 'gmpay_citi'])).toEqual([
+    'cash',
+    'credit_card',
+    'gmpay_citi',
+  ]);
+});
+
+test('companyRefByDeptKey：百貨列對應的公司款別與金額，只列公司有金額者', () => {
+  const refs = companyRefByDeptKey({ credit: 18400, cash: 0, foodpanda: 300 }, PAYMENT_GROUPS.company, COMPANY_TO_DEPT);
+  expect(refs).toEqual({
+    credit_card: { label: '信用卡', amount: 18400 },
+    foodpanda_pending: { label: 'Food panda', amount: 300 },
+  });
+});
+
+test('COMPANY_TO_DEPT：每組對應的百貨列與公司款別金額相同時，對帳無差異', () => {
+  const deptKeys = new Set(PAYMENT_GROUPS.dept.map((f) => f.key));
+  const companyKeys = new Set(PAYMENT_GROUPS.company.map((f) => f.key));
+  for (const [companyKey, deptKey] of Object.entries(COMPANY_TO_DEPT)) {
+    expect(companyKeys.has(companyKey)).toBe(true);
+    expect(deptKeys.has(deptKey)).toBe(true);
+    const r = calculateAdjustments({ [deptKey]: 1234 }, { [companyKey]: 1234 }, []);
+    expect(r.differences, `${companyKey} → ${deptKey}`).toEqual({});
+  }
 });
