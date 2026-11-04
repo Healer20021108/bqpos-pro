@@ -1,5 +1,0 @@
-# Netlify 部署設定。
-# 接 Git 自動部署，或用 CLI「netlify deploy --prod」手動部署，都會讀這份設定。
-[build]
-  command = "npm run build"
-  publish = "dist"
