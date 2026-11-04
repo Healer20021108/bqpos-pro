@@ -71,7 +71,7 @@ diff = 30, target = 50, amount = 3000
 
 <!-- SPEC_SYNC_START -->
 Spec source: PROJECT_SPEC.md
-Spec SHA-256 short hash: c89b94142afe
-Synced at: 2026-06-28T21:36:58.363Z
+Spec SHA-256 short hash: 95d89d488d9f
+Synced at: 2026-11-04T21:19:51.007Z
 Instruction: If any local instruction conflicts with PROJECT_SPEC.md, follow PROJECT_SPEC.md.
 <!-- SPEC_SYNC_END -->
