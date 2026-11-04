@@ -83,8 +83,15 @@ tests/exchange/calculate.test.ts 核心演算法測試
 
 ### 部署
 
-`npm run build` 後把 `dist/` 內容上傳到任何靜態主機（GitHub Pages／Netlify／Cloudflare Pages 等，皆自動附 HTTPS）。
-`vite.config.ts` 已設 `base: './'`，子路徑部署（如 GitHub Pages 的 `/repo/`）也能正常運作。
+純前端、無後端與環境變數，使用 **GitHub Pages** 自動部署（`.github/workflows/deploy.yml`）：
+
+- `main` 分支一有新 commit，GitHub Actions 會自動「安裝套件 → 跑測試 → 打包 → 發布」。
+- 測試或打包失敗就不會發布，線上維持上一版。
+- 也可到 GitHub 的 Actions 分頁手動按「Run workflow」重新部署。
+- 第一次使用前：repo 的 Settings → Pages → Source 選「GitHub Actions」。
+
+網址格式：`https://<帳號>.github.io/<repo>/`。
+`vite.config.ts` 已設 `base: './'`，子路徑部署也能正常運作；`dist/` 也可手動上傳到任何靜態主機。
 
 ### 測試涵蓋
 
