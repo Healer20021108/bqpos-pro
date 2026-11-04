@@ -1,14 +1,12 @@
 // 雙POS對帳的固定資料：欄位表、對帳分類、配對規則。
 // 內容逐字移植自原始 index.html 的 PAYMENT_GROUPS／METHODS（reference/dual-pos-original）。
-//
-// key 命名對齊 ocr.ts 的字典，OCR「套用」可直接寫入不需轉換層。
 
 import type { PaymentField, PosKind } from './types';
 
 export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
   // 百貨POS（Global Mall）—— 78 個欄位，順序對齊真實畫面；UI 每 11 項直列成一頁。
   // active:false 保留為「較少使用」的資料註記；UI 仍固定顯示全部欄位。
-  // 所有欄位都可手動輸入或由 OCR 帶入（顯示規則見 view.ts renderInputs）。
+  // 所有欄位都可手動輸入（顯示規則見 view.ts renderInputs）。
   dept: [
     { key: 'cash', label: '現金', glyph: '金' },
     // 新版百貨POS（2026-10 換機）把連線信用卡拆成中信／聯合兩欄；舊的單欄保留供當日舊資料相容。

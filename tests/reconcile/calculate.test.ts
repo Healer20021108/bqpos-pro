@@ -314,7 +314,7 @@ test('新版百貨POS 2026-10 實拍數字：各款別加總＝銷售總金額 4
 
 test('orderDeptFieldKeys：已排好／加入的列順序固定（填了金額也不跳位），其他有金額的接在後面', () => {
   const fields = ['cash', 'credit_card_citi', 'linepay', 'jkopay', 'pi_wallet'];
-  // 使用者先加了 linepay、jkopay；cash 是 OCR 帶入（有金額但沒按過加入）。
+  // 使用者先加了 linepay、jkopay；cash 是舊資料帶入（有金額但沒按過加入）。
   const order = orderDeptFieldKeys(fields, { cash: 100, jkopay: 280, linepay: '' }, ['linepay', 'jkopay']);
   expect(order).toEqual(['linepay', 'jkopay', 'cash']);
 });

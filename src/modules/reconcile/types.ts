@@ -5,7 +5,7 @@ export type PosKind = 'dept' | 'company';
 
 /** 單一付款方式欄位的定義（顯示用）。 */
 export interface PaymentField {
-  /** 欄位鍵，對齊 OCR 字典的 key，套用辨識結果時不需轉換。 */
+  /** 欄位鍵（程式內部識別用）。 */
   key: string;
   /** 畫面顯示名稱。 */
   label: string;
@@ -13,7 +13,7 @@ export interface PaymentField {
   glyph: string;
   /**
    * 是否已納入對帳配對。false 代表公司POS還沒有對應項目，
-   * UI 會收進「尚未配對」摺疊區，但欄位仍存在、仍可輸入／OCR 寫入。
+   * UI 會收進「尚未配對」摺疊區，但欄位仍存在、仍可輸入。
    */
   active?: boolean;
   /** 舊版 POS 才有的欄位：不再出現在「加款別」清單，但已存在的金額仍照常顯示與計算。 */

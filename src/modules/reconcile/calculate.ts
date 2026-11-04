@@ -5,14 +5,14 @@ import type { Adjustment, PosNumbers, ReconcileResult } from './types';
 import { PAYMENT_GROUPS, METHODS, NO_FORMULA_METHODS, NORMAL_PIECES, LAST_RESORT_PIECES } from './data';
 
 // 各 POS「真正存在的欄位 key」集合，用來把「未配對項目」的加總限制在宣告過的欄位，
-// 避免外部傳進來的雜散 key（測試、整合、未預期的 OCR key）被算進未配對差異。
+// 避免外部傳進來的雜散 key（測試、整合、舊資料的 key）被算進未配對差異。
 const DEPT_KEYS: ReadonlySet<string> = new Set(PAYMENT_GROUPS.dept.map((f) => f.key));
 const COMPANY_KEYS: ReadonlySet<string> = new Set(PAYMENT_GROUPS.company.map((f) => f.key));
 
 /**
  * 把輸入狀態（可能含空字串）正規化為純數字快照。
  * 一律夾成「非負整數」：空白/缺值→0、小數無條件捨去、負數歸 0、非數字→0。
- * 這是計算層的最後防線：不論值從手動輸入或 OCR 哪條路來，進到對帳邏輯前都保證合法，
+ * 這是計算層的最後防線：不論值從手動輸入或已存資料哪條路來，進到對帳邏輯前都保證合法，
  * 避免小數讓 findBestCombination 的 new Array(target+1) 出錯，或負數扭曲差異。
  */
 export function toNumbers(state: Record<string, number | ''>): PosNumbers {
@@ -49,7 +49,7 @@ export function orderCompanyFieldKeys(
 
 /**
  * 百貨 POS 輸入列的顯示順序。
- * 顯示的列＝shownKeys（「同步到百貨POS」排好的順序＋使用者按款別加入的）＋其他已有金額的（如 OCR 帶入）。
+ * 顯示的列＝shownKeys（「同步到百貨POS」排好的順序＋使用者按款別加入的）＋其他已有金額的（如舊資料）。
  * shownKeys 的順序固定不動（填了金額也不跳位，方便由上往下照百貨POS畫面對帳），
  * 其他有金額的列依欄位表順序接在後面。
  */

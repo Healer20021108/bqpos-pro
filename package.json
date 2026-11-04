@@ -19,7 +19,6 @@
     "vitest": "^3.2.6"
   },
   "dependencies": {
-    "@upstash/redis": "^1.38.0",
     "exceljs": "^4.4.0",
     "gsap": "^3.15.0"
   }

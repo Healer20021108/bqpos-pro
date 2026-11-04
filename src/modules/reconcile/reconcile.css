@@ -270,9 +270,6 @@
 .rc .row-del:active {
   background: var(--pos-down-soft);
 }
-.rc .payment-label .warn {
-  cursor: help;
-}
 
 /* 百貨POS列：多筆金額用空格相加，輸入格加寬；下方小字放公司參考金額、＝帶入、合計。 */
 .rc .dept-row input.amount-input {
@@ -396,39 +393,6 @@
 .rc .more-list {
   max-height: 260px;
   overflow-y: auto;
-}
-
-.rc .ocr-section {
-  margin-bottom: 10px;
-}
-.rc .ocr-section[hidden] {
-  display: none;
-}
-.rc .ocr-section .btn {
-  width: 100%;
-}
-.rc .ocr-review {
-  border: 1px solid var(--ink-4);
-  border-radius: 12px;
-  padding: 12px;
-  margin-top: 10px;
-  font-size: 13px;
-  background: var(--surface);
-}
-.rc .ocr-review .title {
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-.rc .ocr-review .quota {
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-}
-.rc .ocr-review .conflict {
-  background: #fff3cd;
-  border-radius: 8px;
-  padding: 8px;
-  margin-top: 8px;
-  font-size: 12px;
 }
 
 .rc .glyph {
