@@ -1,19 +1,22 @@
 // 雙POS對帳模組的 UI 層：讀輸入 → 呼叫純函式 → 渲染。
-// 計算規則都在 calculate.ts / ocr.ts，本檔只負責畫面、事件與 localStorage。
+// 計算規則都在 calculate.ts，本檔只負責畫面、事件與 localStorage。
 // 結構移植自原始 index.html（reference/dual-pos-original），改為殼層可掛載／卸載的模組。
 
-import { PAYMENT_GROUPS, METHODS, OPTIONAL_PIECES, DEPT_QUICK_KEYS } from './data';
+import { PAYMENT_GROUPS, METHODS, OPTIONAL_PIECES, DEPT_QUICK_KEYS, COMPANY_TO_DEPT } from './data';
 import {
   calculateAdjustments,
   deptToCanonical,
   companyToCanonical,
   normalizeProductPieces,
-  syncDeptToCompany,
   toNumbers,
+  parseAmountInput,
+  deptOrderFromCompany,
+  mergeDeptShown,
+  companyRefByDeptKey,
+  type CompanyRef,
   orderCompanyFieldKeys,
   orderDeptFieldKeys,
 } from './calculate';
-import { recognizeAndParse, ocrConfig, type MergedResult } from './ocr';
 import { saveDeptSnapshot } from '../../core/dept-snapshot';
 import { saveCompanySnapshot } from '../../core/company-snapshot';
 import {
@@ -27,9 +30,6 @@ import './reconcile.css';
 
 const HISTORY_KEY = 'posHistoryManualV1';
 const MEMORY_KEY = 'reconcileDailyV1';
-// OCR 抓到的「銷售總金額」存進 state.total（總帳），而非當成付款欄位寫進 state[pos]，
-// 否則會被算進「付款合計」造成重複。用這個保留 key 在 ocrWarn 裡標記總帳的 ⚠️。
-const TOTAL_OCR_KEY = 'sales_total';
 
 interface HistoryEntry {
   ts: string;
@@ -48,12 +48,12 @@ interface State {
   results: ReconcileResult | null;
   history: HistoryEntry[];
   showHistory: boolean;
-  ocrWarn: Set<string>; // 由「信心不足／多張不一致」的 OCR 帶入的百貨POS欄位，列旁顯示 ⚠️
-  total: Record<PosKind, number | ''>; // 各POS的「總帳」（手動或 OCR 銷售總金額），用來核對付款合計
+  total: Record<PosKind, number | ''>; // 各POS的「總帳」（手動輸入的銷售總金額），用來核對付款合計
   companyPinnedKeys: Set<string>; // 最後一次同步有帶入的公司 POS 款別，清空金額後仍保持置頂
   deptShown: string[]; // 百貨POS：使用者按款別加入的列（有金額的列另外會自動顯示）
   deptMoreOpen: boolean; // 「其他款別」是否展開
   deptSearch: string; // 「其他款別」的搜尋字
+  deptRaw: Record<string, string>; // 百貨POS輸入的原始文字（如「12000 6400」），只留在本次畫面，重新整理後顯示加總
 }
 
 interface ReconcileMemory {
@@ -129,16 +129,10 @@ const TEMPLATE = `
       <button class="pos-tab" data-tab="company" data-active="false"><span class="dot"></span>公司POS<span data-out="companyCount"></span></button>
     </div>
 
-    <div class="ocr-section" data-out="ocrSection">
-      <input type="file" accept="image/*" multiple hidden data-act="ocrFile" />
-      <button class="btn btn-secondary" data-act="ocrAdd">📷 拍照辨識（可一次選多張）</button>
-      <div data-out="ocrReviewArea"></div>
-    </div>
-
     <div class="rows" data-out="inputRows"></div>
 
     <div class="inline-sync">
-      <button class="btn btn-secondary" data-act="sync">同步百貨POS金額</button>
+      <button class="btn btn-secondary" data-act="sync" data-out="syncBtn">同步到百貨POS</button>
       <button class="btn btn-primary" data-act="compute">計算調整建議</button>
     </div>
 
@@ -192,7 +186,7 @@ export function renderReconcile(container: HTMLElement): () => void {
   const restoredCompany = restorePosState(memory?.company, 'company');
 
   const state: State = {
-    tab: 'dept',
+    tab: 'company', // 新流程：先填公司POS，再同步排出百貨POS對帳順序
     dept: restorePosState(memory?.dept, 'dept'),
     company: restoredCompany,
     enabled,
@@ -200,12 +194,12 @@ export function renderReconcile(container: HTMLElement): () => void {
     results: null,
     history: loadHistory(),
     showHistory: false,
-    ocrWarn: new Set<string>(),
     total: { dept: deptTotal, company: '' },
     companyPinnedKeys: restoreCompanyPinnedKeys(memory?.companyPinnedKeys, restoredCompany),
     deptShown: restoreDeptShown(memory?.deptShown),
     deptMoreOpen: false,
     deptSearch: '',
+    deptRaw: {},
   };
 
   const q = <T extends HTMLElement = HTMLElement>(sel: string): T =>
@@ -214,8 +208,6 @@ export function renderReconcile(container: HTMLElement): () => void {
   const els = {
     inputRows: q('[data-out="inputRows"]'),
     totalBar: q('[data-out="totalBar"]'),
-    ocrSection: q('[data-out="ocrSection"]'),
-    ocrReviewArea: q('[data-out="ocrReviewArea"]'),
     chips: q('[data-out="chips"]'),
     diffTable: q('[data-out="diffTable"]'),
     results: q('[data-out="results"]'),
@@ -224,7 +216,8 @@ export function renderReconcile(container: HTMLElement): () => void {
     diffCount: q('[data-out="diffCount"]'),
     deptCount: q('[data-out="deptCount"]'),
     companyCount: q('[data-out="companyCount"]'),
-    fileInput: q<HTMLInputElement>('[data-act="ocrFile"]'),
+    syncBtn: q('[data-out="syncBtn"]'),
+    inlineSync: q('.inline-sync'),
   };
 
   function saveMemory(): void {
@@ -242,6 +235,11 @@ export function renderReconcile(container: HTMLElement): () => void {
   // ── 小工具 ────────────────────────────────────────────────────────────
   const val = (pos: PosKind, key: string): string => {
     const v = state[pos][key];
+    // 百貨POS：原始文字（含空格相加）仍對得上目前金額時，原樣顯示，切分頁回來不會變成加總。
+    if (pos === 'dept') {
+      const raw = state.deptRaw[key];
+      if (raw !== undefined && parseAmountInput(raw).value === (v ?? '')) return raw;
+    }
     return v == null ? '' : String(v);
   };
   const num = (v: number): string => (v ? Number(v).toLocaleString() : '—');
@@ -257,8 +255,14 @@ export function renderReconcile(container: HTMLElement): () => void {
   };
 
   function setVal(pos: PosKind, key: string, value: string): void {
-    state[pos][key] = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0);
-    // 百貨POS（手填或 OCR 都走這裡）一有變動就存一份金額快照，供「環球清帳」帶入。
+    if (pos === 'dept') {
+      // 百貨POS可用空格／＋把多筆金額相加；格式錯誤整格視為 0。
+      state.deptRaw[key] = value;
+      state.dept[key] = parseAmountInput(value).value;
+    } else {
+      state[pos][key] = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0);
+    }
+    // 百貨POS一有變動就存一份金額快照，供「環球清帳」帶入。
     if (pos === 'dept') saveDeptSnapshot(toNumbers(state.dept));
     else saveCompanySnapshot(toNumbers(state.company));
     saveMemory();
@@ -266,17 +270,45 @@ export function renderReconcile(container: HTMLElement): () => void {
   }
 
   // ── 動作 ──────────────────────────────────────────────────────────────
-  function syncDeptToCompanyAction(): void {
-    const synced = syncDeptToCompany(toNumbers(state.dept));
-    // 只填入有金額的欄位，0／空白留白，避免一整排「0」。
-    const next: PosState = {};
-    for (const [k, v] of Object.entries(synced)) if (v !== 0) next[k] = v;
-    state.company = next;
-    state.companyPinnedKeys = new Set(Object.keys(next));
-    saveCompanySnapshot(toNumbers(state.company));
+  // 「同步到百貨POS」：依公司POS金額由高到低排出百貨要對帳的款別列（只排順序、不帶金額），
+  // 使用者原本自己加入的列接在後面；接著切到百貨POS分頁，由上往下照百貨POS畫面填。
+  function syncCompanyToDeptAction(): void {
+    const order = deptOrderFromCompany(
+      toNumbers(state.company),
+      PAYMENT_GROUPS.company.map((field) => field.key),
+      COMPANY_TO_DEPT,
+    );
+    if (!order.length) {
+      alert('公司POS還沒有金額。請先填公司POS各款別金額，再按同步。');
+      return;
+    }
+    state.deptShown = mergeDeptShown(order, state.deptShown);
     saveMemory();
-    state.tab = 'company';
+    state.tab = 'dept';
     render();
+    els.inputRows.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // 「＝帶入」：百貨金額跟公司一樣時，一鍵把公司金額填進百貨這一列。
+  function fillDeptFromCompany(key: string): void {
+    const ref = currentCompanyRefs()[key];
+    if (!ref) return;
+    state.dept[key] = ref.amount;
+    delete state.deptRaw[key];
+    saveDeptSnapshot(toNumbers(state.dept));
+    saveMemory();
+    const row = els.inputRows.querySelector<HTMLElement>(`.payment-row[data-key="${key}"]`);
+    const input = row?.querySelector<HTMLInputElement>('input[data-key]');
+    if (row && input) {
+      input.value = String(ref.amount);
+      row.dataset.filled = 'true';
+      updateDeptRowHint(row, key);
+    }
+    renderDynamic();
+  }
+
+  function currentCompanyRefs(): Record<string, CompanyRef> {
+    return companyRefByDeptKey(toNumbers(state.company), PAYMENT_GROUPS.company, COMPANY_TO_DEPT);
   }
 
   function compute(): void {
@@ -311,13 +343,11 @@ export function renderReconcile(container: HTMLElement): () => void {
     state.history = [];
     state.enabled = defaultEnabled();
     state.customPiece = '';
-    state.ocrWarn.clear(); // 連同 ⚠️ 標記一起清掉
     state.total = { dept: '', company: '' }; // 清掉總帳
     state.companyPinnedKeys.clear();
     state.deptShown = [];
     state.deptSearch = '';
-    ocrRun++; // 作廢任何進行中的辨識
-    els.ocrReviewArea.innerHTML = ''; // 清掉辨識結果摘要
+    state.deptRaw = {};
     clearDailyMemory(HISTORY_KEY);
     clearDailyMemory(MEMORY_KEY);
     render();
@@ -356,21 +386,61 @@ export function renderReconcile(container: HTMLElement): () => void {
     });
     els.deptCount.textContent = countFilled(state.dept) ? ` · ${countFilled(state.dept)}` : '';
     els.companyCount.textContent = countFilled(state.company) ? ` · ${countFilled(state.company)}` : '';
-    // OCR 字典目前主要對齊百貨POS，只在百貨POS分頁顯示拍照辨識。
-    els.ocrSection.hidden = state.tab !== 'dept';
+    // 同步方向是「公司 → 百貨」，只在公司POS分頁提供；百貨分頁只留計算按鈕。
+    els.syncBtn.hidden = state.tab !== 'company';
+    els.inlineSync.dataset.single = String(state.tab !== 'company');
+  }
+
+  // 百貨列下方小字：公司參考金額＋「＝帶入」、空格相加的即時加總、格式錯誤提示。
+  function deptRowHintHtml(key: string, refs: Record<string, CompanyRef>): string {
+    const ref = refs[key];
+    const parsed = parseAmountInput(val('dept', key));
+    const parts: string[] = [];
+    if (ref) {
+      parts.push(
+        `<span class="ref-text">公司 ${escapeHtml(ref.label)} NT$${ref.amount.toLocaleString()}</span>`,
+        `<button type="button" class="fill-btn" data-act="fillFromCompany" data-key="${key}" aria-label="百貨金額同公司，帶入 ${ref.amount}">＝帶入</button>`,
+      );
+    }
+    if (!parsed.valid) {
+      parts.push('<span class="sum-text bad">格式有誤：只能填數字，多筆用空格或＋隔開</span>');
+    } else if (parsed.parts > 1 && typeof parsed.value === 'number') {
+      parts.push(`<span class="sum-text">合計 NT$${parsed.value.toLocaleString()}</span>`);
+    }
+    return parts.join('');
+  }
+
+  function updateDeptRowHint(row: HTMLElement, key: string): void {
+    const hint = row.querySelector<HTMLElement>('.row-hint');
+    if (!hint) return;
+    const html = deptRowHintHtml(key, currentCompanyRefs());
+    hint.innerHTML = html;
+    hint.hidden = html === '';
   }
 
   function renderInputs(): void {
     const pos = state.tab;
     const fields = PAYMENT_GROUPS[pos];
-    // 手動與 OCR 帶入都寫進同一份 state，因此大於 0 的欄位會套用相同醒目樣式。
+    const refs = pos === 'dept' ? currentCompanyRefs() : {};
+    // 大於 0 的欄位套用醒目樣式。
     const rowHtml = (f: (typeof fields)[number]): string => {
       const filled = hasInput(pos, f.key);
-      // ⚠️ 只標在百貨POS：表示這格是 OCR 以「低信心／多張不一致」帶入的，請人工再確認一次。
-      const warn = pos === 'dept' && state.ocrWarn.has(f.key) ? ' <span class="warn" title="辨識信心不足，請確認">⚠️</span>' : '';
+      if (pos === 'dept') {
+        // 百貨POS：文字輸入（電話鍵盤有「＋」），可用空格／＋把多筆金額相加。
+        const hint = deptRowHintHtml(f.key, refs);
+        return `
+        <div class="payment-row dept-row" data-key="${f.key}" data-filled="${filled}">
+          <span class="payment-label"><span class="glyph">${f.glyph}</span><span>${f.label}</span></span>
+          <div class="payment-value">
+            <input type="text" inputmode="tel" autocomplete="off" class="amount-input" placeholder="0" aria-label="${f.label}金額（多筆可用空格相加）" data-pos="dept" data-key="${f.key}" value="${escapeHtml(val('dept', f.key))}" />
+            <button class="row-del" data-act="rowDel" data-pos="dept" data-key="${f.key}" title="移除這列">刪除</button>
+          </div>
+          <div class="row-hint"${hint ? '' : ' hidden'}>${hint}</div>
+        </div>`;
+      }
       return `
         <div class="payment-row" data-key="${f.key}" data-filled="${filled}">
-          <span class="payment-label"><span class="glyph">${f.glyph}</span><span>${f.label}${warn}</span></span>
+          <span class="payment-label"><span class="glyph">${f.glyph}</span><span>${f.label}</span></span>
           <div class="payment-value">
             <input type="number" inputmode="numeric" placeholder="0" aria-label="${f.label}金額" data-pos="${pos}" data-key="${f.key}" value="${val(pos, f.key)}" />
             <button class="row-del" data-act="rowDel" data-pos="${pos}" data-key="${f.key}" title="清除這格">刪除</button>
@@ -407,7 +477,7 @@ export function renderReconcile(container: HTMLElement): () => void {
       .join('');
     const rowsHtml = visibleKeys.length
       ? visibleKeys.map((key) => rowHtml(byKey.get(key)!)).join('')
-      : '<div class="rows-empty">還沒有輸入。照百貨 POS 畫面，按下方款別加入並填金額，或用上面的拍照辨識。</div>';
+      : '<div class="rows-empty">還沒有款別。先到「公司POS」填金額並按「同步到百貨POS」，會依金額由高到低排好；也可以按下方款別自行加入。</div>';
     els.inputRows.innerHTML = `
       <section class="dept-payment-list" aria-label="百貨 POS 付款方式">
         ${rowsHtml}
@@ -692,17 +762,14 @@ export function renderReconcile(container: HTMLElement): () => void {
   }
 
   // ── 總帳核對（navbar），依分頁分流 ───────────────────────────────────────
-  // 百貨：input=手填／OCR銷售總金額（總帳）；info 顯示付款合計與差距。
+  // 百貨：input=手填銷售總金額（總帳）；info 顯示付款合計與差距。
   // 公司：input=自動加總公司付款（唯讀）；info 比對百貨總帳（公司應等於百貨銷售總金額）。
   function renderTotalBar(): void {
     if (state.tab === 'dept') {
-      const warn = state.ocrWarn.has(TOTAL_OCR_KEY)
-        ? ' <span class="warn" title="辨識信心不足，請確認">⚠️</span>'
-        : '';
       const totalVal = state.total.dept;
       els.totalBar.innerHTML = `
         <label class="total-input-wrap">
-          <span class="total-label">百貨總帳${warn}</span>
+          <span class="total-label">百貨總帳</span>
           <input type="number" inputmode="numeric" placeholder="銷售總金額" data-total="dept" value="${totalVal === '' ? '' : totalVal}" />
         </label>
         <div class="total-info" data-out="totalInfo"></div>`;
@@ -758,81 +825,9 @@ export function renderReconcile(container: HTMLElement): () => void {
     }
   }
 
-  // ── OCR：拍照／選圖 → 立刻辨識 → 直接自動帶入表單（不需再按確認）──────────
-  // 一次可選一張或多張；多張會自動合併、互相驗證。低信心或多張不一致的欄位會在
-  // 帶入後標 ⚠️（見 renderInputs），提醒人工複核，但不擋下自動帶入。
-  async function handleOcrFiles(files: File[]): Promise<void> {
-    if (!files.length) return;
-    const myRun = ++ocrRun; // 認領這次辨識的序號；卸載或又選了新照片就讓舊結果作廢
-    els.ocrReviewArea.innerHTML = `<div class="ocr-review">辨識中，共 ${files.length} 張照片…</div>`;
-    try {
-      const result = await recognizeAndParse(files, 'dept');
-      if (unmounted || myRun !== ocrRun) return; // 已卸載或又選了新照片 → 這次結果作廢
-      const conflictKeys = new Set(result.conflicts.map((c) => c.key));
-      const matchedEntries = Object.entries(result.matched);
-      let applied = 0;
-      let warned = 0;
-      matchedEntries.forEach(([key, r]) => {
-        const value = Math.max(0, Math.floor(Number(r.value) || 0)); // 與 setVal 同樣正規化為非負整數
-        const lowConf = r.confidence < ocrConfig.confidenceWarningThreshold;
-        const warnThis = conflictKeys.has(key) || lowConf;
-        if (key === TOTAL_OCR_KEY) {
-          // 銷售總金額 → 總帳（不寫進付款欄位，避免被算進付款合計造成重複）。
-          state.total.dept = value;
-        } else {
-          // OCR 字典對齊百貨POS，固定寫入 'dept'。經由 setVal 正規化為非負整數
-          // （與手動輸入同一條路徑），避免小數流入計算讓 findBestCombination 擲例外。
-          setVal('dept', key, String(value));
-        }
-        applied++;
-        if (warnThis) {
-          state.ocrWarn.add(key); // 標 ⚠️ 提醒人工複核（總帳用 TOTAL_OCR_KEY）
-          warned++;
-        } else {
-          state.ocrWarn.delete(key); // 這次讀得很有把握 → 清掉舊的 ⚠️
-        }
-      });
-      render(); // 重畫表單：帶入值、醒目標示非零欄位、低信心欄位標 ⚠️
-      saveDeptSnapshot(toNumbers(state.dept));
-      saveMemory();
-      renderOcrNotice(result, applied, warned);
-    } catch (err) {
-      if (unmounted || myRun !== ocrRun) return;
-      const msg = err instanceof Error ? err.message : String(err);
-      els.ocrReviewArea.innerHTML = `<div class="ocr-review" style="color:var(--pos-down);">辨識失敗：${escapeHtml(msg)}</div>`;
-    }
-  }
-
-  // 辨識後的「結果摘要」：純提示，不是確認步驟（值已自動帶入表單）。
-  function renderOcrNotice(result: MergedResult, applied: number, warned: number): void {
-    const quotaLine = result.quota
-      ? `<div class="quota">OCR 額度：今日剩餘 <b>${result.quota.dailyRemaining}</b>／${result.quota.dailyLimit}，本週剩餘 <b>${result.quota.weeklyRemaining}</b>／${result.quota.weeklyLimit}</div>`
-      : '';
-    if (!applied) {
-      els.ocrReviewArea.innerHTML = `<div class="ocr-review">這 ${result.sourceCount} 張照片沒有辨識到任何已知欄位。${quotaLine}</div>`;
-      return;
-    }
-    const conflictHtml = result.conflicts.length
-      ? `<div class="conflict">⚠️ 以下欄位在不同照片讀到不同數值，已自動採用信心最高的一張，請務必確認：<br/>${result.conflicts
-          .map((c) => `${escapeHtml(c.key)}：${c.values.map((v) => `第${v.source + 1}張=${v.value.toLocaleString()}`).join(' vs ')}`)
-          .join('<br/>')}</div>`
-      : '';
-    const warnLine = warned ? `，其中 <b>${warned}</b> 項信心不足已標 ⚠️，請再確認` : '';
-    els.ocrReviewArea.innerHTML = `
-      <div class="ocr-review">
-        <div class="title" style="color:var(--pos-up);">已自動帶入 ${applied} 項欄位 ✓${warnLine}</div>
-        ${quotaLine}
-        ${conflictHtml}
-      </div>`;
-  }
-
   // ── 事件綁定（全部掛 signal，卸載時一次移除）────────────────────────────
   const controller = new AbortController();
   const { signal } = controller;
-  let unmounted = false;
-  // 每次「辨識」拿一個遞增序號；佇列變動（加/刪/清）也會遞增，讓還在跑的舊辨識作廢，
-  // 避免照片已換掉後，舊結果才回來蓋掉畫面、被使用者誤按套用。
-  let ocrRun = 0;
 
   // 輸入欄位（事件委派於穩定的 inputRows 容器）。
   els.inputRows.addEventListener(
@@ -848,16 +843,12 @@ export function renderReconcile(container: HTMLElement): () => void {
       const pos = t.dataset.pos as PosKind | undefined;
       const key = t.dataset.key;
       if (pos && key) {
-        // ⚠️ 只屬於百貨POS；公司POS有同名 key（cash／linepay…），不可在公司端清掉百貨的 ⚠️。
-        if (pos === 'dept' && state.ocrWarn.delete(key)) {
-          // 手動改過＝已人工確認：即時移除該列的 ⚠️（不重畫分頁、不打斷輸入）。
-          t.closest('.payment-row')?.querySelector('.warn')?.remove();
-        }
         setVal(pos, key, t.value);
         // renderDynamic 不重畫輸入分頁；在原 DOM 即時切換外框、粗體與刪除鍵。
         const filled = hasInput(pos, key);
         const row = t.closest<HTMLElement>('.payment-row');
         if (row) row.dataset.filled = String(filled);
+        if (pos === 'dept' && row) updateDeptRowHint(row, key);
         // 不在打字中重排公司POS的列：搬動含焦點的列會讓 input 失焦、手機收起鍵盤。
         // 「已填優先」的排序改在整頁重畫時套用（切分頁／同步／計算），見 renderInputs。
       }
@@ -913,10 +904,13 @@ export function renderReconcile(container: HTMLElement): () => void {
       const actEl = el.closest<HTMLElement>('[data-act]');
       const act = actEl?.dataset.act;
       if (act === 'clear') clearAll();
-      else if (act === 'sync') syncDeptToCompanyAction();
+      else if (act === 'sync') syncCompanyToDeptAction();
+      else if (act === 'fillFromCompany') {
+        const key = actEl?.dataset.key;
+        if (key) fillDeptFromCompany(key);
+      }
       else if (act === 'compute') compute();
       else if (act === 'export') exportText();
-      else if (act === 'ocrAdd') els.fileInput.click();
       else if (act === 'addRow') {
         const key = actEl?.dataset.key;
         if (key) addDeptRow(key);
@@ -927,10 +921,10 @@ export function renderReconcile(container: HTMLElement): () => void {
         const key = actEl?.dataset.key;
         if (pos && key) {
           state[pos][key] = '';
+          if (pos === 'dept') delete state.deptRaw[key];
           if (pos === 'dept') saveDeptSnapshot(toNumbers(state.dept));
           else saveCompanySnapshot(toNumbers(state.company));
           saveMemory();
-          if (pos === 'dept') state.ocrWarn.delete(key); // ⚠️ 只屬於百貨POS
           if (pos === 'dept') {
             // 百貨POS：刪除＝整列拿掉（款別回到「加入款別」清單），不是留一個空格子。
             state.deptShown = state.deptShown.filter((k) => k !== key);
@@ -942,7 +936,6 @@ export function renderReconcile(container: HTMLElement): () => void {
           const row = actEl.closest<HTMLElement>('.payment-row');
           const input = row?.querySelector<HTMLInputElement>('input[data-key]');
           if (input) input.value = '';
-          row?.querySelector('.warn')?.remove();
           if (row) row.dataset.filled = 'false';
           reorderCompanyRows();
           renderDynamic();
@@ -966,24 +959,7 @@ export function renderReconcile(container: HTMLElement): () => void {
       const v = t.value.trim();
       state.total[pos] = v === '' ? '' : Math.max(0, parseInt(v, 10) || 0);
       saveMemory();
-      // 手動改過總帳＝已人工確認，清掉它的 ⚠️（僅百貨）並即時移除標記。
-      if (pos === 'dept' && state.ocrWarn.delete(TOTAL_OCR_KEY)) {
-        t.closest('.total-input-wrap')?.querySelector('.warn')?.remove();
-      }
       renderTotalInfo();
-    },
-    { signal },
-  );
-
-  els.fileInput.addEventListener(
-    'change',
-    (e) => {
-      const input = e.target as HTMLInputElement;
-      // 先把檔案取進穩定陣列，再清空 input.value。順序很重要：
-      // input.files 是 live FileList，先設 value='' 會把它清空，handleOcrFiles 就收到 0 張。
-      const files = (input.files ? Array.from(input.files) : []).filter((f) => f.type.startsWith('image/'));
-      input.value = ''; // 清空，下次選同一張也能再次觸發 change
-      if (files.length) void handleOcrFiles(files); // 選好（單張或多張）立刻辨識並自動帶入
     },
     { signal },
   );
@@ -993,7 +969,6 @@ export function renderReconcile(container: HTMLElement): () => void {
   const stopDailyReset = scheduleDailyReset(resetAll);
 
   return () => {
-    unmounted = true;
     stopDailyReset();
     controller.abort();
     container.innerHTML = '';

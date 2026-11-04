@@ -1,20 +1,19 @@
 // 雙POS對帳的固定資料：欄位表、對帳分類、配對規則。
 // 內容逐字移植自原始 index.html 的 PAYMENT_GROUPS／METHODS（reference/dual-pos-original）。
-//
-// key 命名對齊 ocr.ts 的字典，OCR「套用」可直接寫入不需轉換層。
 
 import type { PaymentField, PosKind } from './types';
 
 export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
   // 百貨POS（Global Mall）—— 78 個欄位，順序對齊真實畫面；UI 每 11 項直列成一頁。
   // active:false 保留為「較少使用」的資料註記；UI 仍固定顯示全部欄位。
-  // 所有欄位都可手動輸入或由 OCR 帶入（顯示規則見 view.ts renderInputs）。
+  // 所有欄位都可手動輸入（顯示規則見 view.ts renderInputs）。
   dept: [
     { key: 'cash', label: '現金', glyph: '金' },
     // 新版百貨POS（2026-10 換機）把連線信用卡拆成中信／聯合兩欄；舊的單欄保留供當日舊資料相容。
     { key: 'credit_card_citi', label: '連線信用卡(中信)', glyph: '卡' },
     { key: 'credit_card_union', label: '連線信用卡(聯合)', glyph: '卡' },
-    { key: 'credit_card', label: '連線信用卡', glyph: '卡', active: false, legacy: true },
+    // 單欄「信用卡」：舊資料相容，也是「同步到百貨POS」時公司信用卡對應的那一列（中信＋聯合＋離線寫在一起）。
+    { key: 'credit_card', label: '信用卡', glyph: '卡', active: false, legacy: true },
     { key: 'credit_card_offline', label: '離線信用卡', glyph: '卡' },
     { key: 'product_voucher', label: '商品禮券', glyph: '禮' },
     { key: 'receivable_amount', label: '應收帳款', glyph: '收', active: false },
@@ -139,6 +138,35 @@ export const DEPT_QUICK_KEYS: string[] = [
   'pi_wallet',
   'imall_discount',
 ];
+
+// 「同步到百貨POS」用：公司POS款別 → 百貨POS 要排出的那一列（一對一，不拆子款別）。
+// 一對多的分類（信用卡、LINE、GMPay…）只排一列，金額由使用者自行加總填入。
+// 每一組都必須在 deptToCanonical／companyToCanonical 落在同一個比對分類（有測試鎖定）。
+// 加價購：百貨POS無對應款別，不排列；金額仍併入「未配對項目」比對。
+export const COMPANY_TO_DEPT: Readonly<Record<string, string>> = {
+  cash: 'cash',
+  voucher: 'jingcheng_discount',
+  credit: 'credit_card',
+  product_voucher: 'product_voucher',
+  linepay: 'linepay',
+  pi_wallet: 'pi_wallet',
+  easycard_pay: 'easycard_pay',
+  px_pay: 'full_pay',
+  gmpay: 'gmpay',
+  icash_pay: 'icash_pay',
+  jkopay: 'jkopay',
+  easycard_card: 'easycard_card',
+  twpay: 'twpay',
+  jkopay_offset: 'jkopay_offset',
+  foodpanda: 'foodpanda_pending',
+  ubereats: 'ubereats_pending',
+  global_points_offset: 'imall_discount',
+  ipass_card: 'ipass_money_app',
+  orange_pay: 'orange_pay',
+  instant_voucher: 'instant_voucher',
+  balance_voucher: 'balance_voucher',
+  twpay_offset: 'twpay_discount',
+};
 
 // 對帳比對的分類軸（canonical 分類）：每一項代表一條配對規則的比較軸，
 // 由 deptToCanonical／companyToCanonical 各自加總兩邊 POS 對應欄位後逐項相減。

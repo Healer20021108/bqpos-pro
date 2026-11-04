@@ -1,0 +1,58 @@
+# GitHub Pages 自動部署。
+# main 分支一有新 commit 就會：安裝套件 → 跑測試 → 打包 → 發布 dist/ 到 GitHub Pages。
+# 測試或打包失敗就不會發布，線上版本維持上一版。
+# 也可以到 GitHub 的 Actions 分頁手動按「Run workflow」重新部署。
+#
+# 第一次使用前：到 repo 的 Settings → Pages，把 Source 設為「GitHub Actions」。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時只跑一個部署；新的推送會排隊，不會中斷正在進行的發布。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安裝套件
+        run: npm ci
+
+      - name: 跑測試
+        run: npm test
+
+      - name: 打包
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

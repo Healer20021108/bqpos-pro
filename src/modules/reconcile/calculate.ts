@@ -5,14 +5,14 @@ import type { Adjustment, PosNumbers, ReconcileResult } from './types';
 import { PAYMENT_GROUPS, METHODS, NO_FORMULA_METHODS, NORMAL_PIECES, LAST_RESORT_PIECES } from './data';
 
 // 各 POS「真正存在的欄位 key」集合，用來把「未配對項目」的加總限制在宣告過的欄位，
-// 避免外部傳進來的雜散 key（測試、整合、未預期的 OCR key）被算進未配對差異。
+// 避免外部傳進來的雜散 key（測試、整合、舊資料的 key）被算進未配對差異。
 const DEPT_KEYS: ReadonlySet<string> = new Set(PAYMENT_GROUPS.dept.map((f) => f.key));
 const COMPANY_KEYS: ReadonlySet<string> = new Set(PAYMENT_GROUPS.company.map((f) => f.key));
 
 /**
  * 把輸入狀態（可能含空字串）正規化為純數字快照。
  * 一律夾成「非負整數」：空白/缺值→0、小數無條件捨去、負數歸 0、非數字→0。
- * 這是計算層的最後防線：不論值從手動輸入或 OCR 哪條路來，進到對帳邏輯前都保證合法，
+ * 這是計算層的最後防線：不論值從手動輸入或已存資料哪條路來，進到對帳邏輯前都保證合法，
  * 避免小數讓 findBestCombination 的 new Array(target+1) 出錯，或負數扭曲差異。
  */
 export function toNumbers(state: Record<string, number | ''>): PosNumbers {
@@ -48,9 +48,10 @@ export function orderCompanyFieldKeys(
 }
 
 /**
- * 百貨 POS 輸入列的顯示順序（新版 POS 把有結帳的款別移到最前面，這裡照辦）。
- * 顯示的列＝使用者按款別加入的（shownKeys）＋已有金額的；
- * 有金額的排最前（依加入順序，其餘依欄位表順序），剛加入還沒填的排在後面。
+ * 百貨 POS 輸入列的顯示順序。
+ * 顯示的列＝shownKeys（「同步到百貨POS」排好的順序＋使用者按款別加入的）＋其他已有金額的（如舊資料）。
+ * shownKeys 的順序固定不動（填了金額也不跳位，方便由上往下照百貨POS畫面對帳），
+ * 其他有金額的列依欄位表順序接在後面。
  */
 export function orderDeptFieldKeys(
   fieldKeys: readonly string[],
@@ -65,8 +66,80 @@ export function orderDeptFieldKeys(
   const shown = [...new Set(shownKeys)].filter((key) => valid.has(key));
   const shownSet = new Set(shown);
   const extra = fieldKeys.filter((key) => isFilled(key) && !shownSet.has(key));
-  const all = [...shown, ...extra];
-  return [...all.filter(isFilled), ...all.filter((key) => !isFilled(key))];
+  return [...shown, ...extra];
+}
+
+export interface AmountInput {
+  /** 加總後金額；空白為 ''，格式錯誤為 0。 */
+  value: number | '';
+  /** 有幾段金額（2 段以上代表有用空格／＋相加）。 */
+  parts: number;
+  /** false＝含數字、空格、＋、千分位逗號以外的字元，或有小數、負數。 */
+  valid: boolean;
+}
+
+/**
+ * 百貨POS金額輸入：允許用空格或「＋」把多筆金額相加，例如「12000 6400」→ 18400。
+ * 千分位逗號會被忽略（「18,400」→ 18400）。全形數字、空白、＋ 也接受。
+ * 規則同其他輸入：只收非負整數；有任何一段不合法（小數、負號、文字）整格視為無效（0）。
+ */
+export function parseAmountInput(raw: string): AmountInput {
+  const text = raw
+    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/[＋]/g, '+')
+    .replace(/[,，]/g, '')
+    .trim();
+  if (text === '') return { value: '', parts: 0, valid: true };
+  const tokens = text.split(/[\s+]+/).filter((t) => t !== '');
+  if (tokens.length === 0 || !tokens.every((t) => /^\d+$/.test(t))) {
+    return { value: 0, parts: tokens.length, valid: false };
+  }
+  const sum = tokens.reduce((s, t) => s + Number(t), 0);
+  if (!Number.isSafeInteger(sum)) return { value: 0, parts: tokens.length, valid: false };
+  return { value: sum, parts: tokens.length, valid: true };
+}
+
+/**
+ * 「同步到百貨POS」：依公司POS金額由高到低，排出百貨POS要對帳的款別列（只排順序、不帶金額）。
+ * 金額相同時維持公司POS欄位表順序；沒有百貨對應的款別（加價購）略過。
+ */
+export function deptOrderFromCompany(
+  company: PosNumbers,
+  companyFieldKeys: readonly string[],
+  mapping: Readonly<Record<string, string>>,
+): string[] {
+  const rows = companyFieldKeys
+    .map((key, index) => ({ key, index, amount: company[key] ?? 0 }))
+    .filter((r) => r.amount > 0 && mapping[r.key] !== undefined)
+    .sort((a, b) => b.amount - a.amount || a.index - b.index);
+  return [...new Set(rows.map((r) => mapping[r.key]))];
+}
+
+/** 同步後的百貨列：先放同步排好的順序，再接上使用者原本自行加入、但不在同步結果裡的列。 */
+export function mergeDeptShown(synced: readonly string[], previous: readonly string[]): string[] {
+  return [...new Set([...synced, ...previous])];
+}
+
+export interface CompanyRef {
+  /** 公司POS款別名稱。 */
+  label: string;
+  /** 公司POS金額。 */
+  amount: number;
+}
+
+/** 每個百貨列對應的公司POS款別與金額（只列出公司金額大於 0 者），供列上小字參考與「＝帶入」。 */
+export function companyRefByDeptKey(
+  company: PosNumbers,
+  companyFields: readonly { key: string; label: string }[],
+  mapping: Readonly<Record<string, string>>,
+): Record<string, CompanyRef> {
+  const out: Record<string, CompanyRef> = {};
+  for (const field of companyFields) {
+    const deptKey = mapping[field.key];
+    const amount = company[field.key] ?? 0;
+    if (deptKey && amount > 0) out[deptKey] = { label: field.label, amount };
+  }
+  return out;
 }
 
 /**
