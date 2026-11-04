@@ -1,104 +1,117 @@
-# POS／預備金換錢決策器
+# 百貨收銀工具
 
-本資料夾提供 Claude Code 與 Codex 協作開發用文件。
+百貨收銀現場用的手機網頁工具，有五個分頁：換錢、對帳、清帳、盤點。
 
-## 文件用途
+**線上網址**：https://healer20021108.github.io/bqpos-pro/
 
-- `PROJECT_SPEC.md`：唯一需求規格來源。
-- `CLAUDE.md`：Claude Code 專用操作指引。
-- `AGENTS.md`：Codex 專用操作指引。
-- `AGENT.md`：相容提醒檔，正式請使用 `AGENTS.md`。
-- `docs/WORKFLOW.md`：Claude Code 與 Codex 銜接流程。
-- `scripts/sync-agent-docs.mjs`：同步規格版本摘要到 agent 指引檔。
+> 需求與計算規則一律以 [`PROJECT_SPEC.md`](PROJECT_SPEC.md) 為準；本檔只說明怎麼使用與開發，不重複規則細節。
 
-## 使用方式
+---
 
-```bash
-npm run sync:agents
-```
+## 功能
 
-或：
+| 分頁 | 用途 | 規格 |
+|---|---|---|
+| 換錢決策 | 輸入各面額目前數量，算出要去外部換多少（湊整千、付千元鈔） | `PROJECT_SPEC.md` 第 1–8、10 節 |
+| 雙POS對帳 | 先填公司POS → 同步排出百貨POS對帳順序 → 比對差異、給調整建議 | `PROJECT_SPEC.md` 第 11 節 |
+| 環球清帳 | 帶入百貨POS金額，產生環球結帳單（唯讀，照抄用） | 尚未規格化（見第 12 節） |
+| KK清帳 | 帶入公司POS金額，整理成 KK 單欄清帳表 | 尚未規格化 |
+| 盤點模組 | 依品項填盤點數量，匯出 Excel 盤點表 | 尚未規格化 |
 
-```bash
-node scripts/sync-agent-docs.mjs
-```
+## 使用須知
 
-## 應用程式
+- **手機優先**。可用瀏覽器的「加入主畫面」，用起來像 App。
+- **資料只存在自己的瀏覽器**（當日記憶），不會上傳；換日自動清空。換手機、換瀏覽器或換網址都看不到之前的資料。
+- 不需要登入，也沒有後端或資料庫。
 
-手機優先的單頁網頁工具，採 **Vite + TypeScript**，純前端、不需後端／登入／資料庫。
-採模組化架構：一個分頁殼層 + 多個獨立功能模組，方便持續新增功能。
+---
 
-**換錢模組（目前行為）**：只填「各幣值目前總共有多少」，即直接算出「各幣值要換多少」。
-預設一盒備用金，目標持有量為 500→16、100→50、50→27、10→130、5→76、1→230（NT$16,260）；
-切換成兩盒時，目標為 500→26、100→75、50→46、10→230、5→136、1→430（NT$26,210）。
-要換的數量＝目標−目前，已達標準就不用換、超過則顯示多出。
-（註：此為簡化後需求，與 `PROJECT_SPEC.md` 原本的兩段式規則不同；以實際程式與此說明為準。）
+## 開發
 
-### 快速啟動（最簡單，含手機測試）
+技術：**Vite + TypeScript**，純前端。測試用 **vitest**。
 
-**macOS 直接雙擊專案根目錄的 `start.command`**。它會自動安裝相依（首次）、啟動開發伺服器，並在終端機印出：
+### 快速啟動（含手機測試）
+
+**macOS 直接雙擊專案根目錄的 `start.command`**。它會自動安裝套件（第一次）、啟動開發伺服器，並在終端機印出：
 
 - **Local**：電腦用網址（預設 http://localhost:5173 ）
-- **Network**：手機用網址（手機需與電腦連同一個 Wi-Fi）
+- **Network**：手機用網址（手機要跟電腦連同一個 Wi-Fi）
 - **QR Code**：手機相機掃碼即可開啟
 
 要停止：在該終端機視窗按 `Ctrl + C`。
-（首次若被 macOS 攔「未識別的開發者」，到「系統設定 → 隱私權與安全性」按「仍要打開」，之後不再詢問。）
+第一次若被 macOS 攔下「未識別的開發者」，到「系統設定 → 隱私權與安全性」按「仍要打開」，之後就不會再問。
 
 ### 指令
 
 ```bash
-npm install      # 安裝相依（第一次）
-npm start        # 啟動開發伺服器（開放區網 + QR，手機可測）；= npm run dev
-npm run build    # 產生靜態檔到 dist/（部署用）
-npm run preview  # 本機預覽 build 後的結果
-npm test         # 跑核心演算法測試（vitest）
+npm install          # 安裝套件（第一次）
+npm start            # 啟動開發伺服器（開放區網＋QR Code，手機可測）；同 npm run dev
+npm test             # 跑全部測試
+npm run build        # 型別檢查＋打包到 dist/
+npm run preview      # 本機預覽打包結果
+npm run sync:agents  # 改完 PROJECT_SPEC.md 後執行，同步規格雜湊到 CLAUDE.md／AGENTS.md
 ```
-
-不雙擊 `start.command` 也可以，直接 `npm start`，用瀏覽器開它顯示的網址即可。
 
 ### 架構
 
+一個分頁殼層＋共用層＋多個獨立功能模組。每個模組都拆成三個檔案：
+
+- `calculate.ts`：只放計算，純函式，可測試
+- `view.ts`：畫面與事件
+- `index.ts`：模組入口
+
 ```text
-index.html                       Vite 入口
+index.html                 Vite 入口
 src/
-  main.ts                        啟動殼層
-  shell/                         分頁殼層：分頁列 + hash 路由 + 掛載／卸載
-  core/                          跨模組共用：型別、面額規則、金額格式
+  main.ts                  啟動殼層
+  shell/                   分頁列、hash 路由（#/exchange…）、掛載／卸載
+  core/                    跨模組共用
+    rules.ts               面額與目標持有量
+    format.ts              新台幣格式
+    types.ts               共用型別（FeatureModule 介面）
+    daily-memory.ts        當日記憶（localStorage，跨日清空）
+    dept-snapshot.ts       百貨POS金額快照（對帳 → 環球清帳）
+    company-snapshot.ts    公司POS金額快照（對帳 → KK清帳）
+    animate.ts             共用動畫
   modules/
-    registry.ts                  模組註冊表（新增功能在此掛上）
-    exchange/                    換錢決策模組（第一個模組）
-      calculate.ts               核心演算法（純函式，可測試）
-      view.ts                    UI 渲染與現場指令文字
-      index.ts                   模組進入點（實作 FeatureModule 介面）
-  styles/base.css                全域樣式與共用元件
-tests/exchange/calculate.test.ts 核心演算法測試
+    registry.ts            模組註冊表（分頁順序）
+    exchange/              換錢決策
+    reconcile/             雙POS對帳（data.ts：欄位表與款別對應）
+    universal/             環球清帳
+    kk/                    KK清帳
+    inventory/             盤點模組（items.ts：品項；template.xlsx：Excel 範本）
+  styles/base.css          全域樣式
+tests/                     依模組分資料夾，對應 src/modules 與 src/core
 ```
 
 ### 新增一個功能模組
 
-1. 在 `src/modules/<名稱>/` 建立 `index.ts`，預設匯出一個物件，實作 `FeatureModule` 介面（`id` / `title` / `mount(container)`）。
+1. 在 `src/modules/<名稱>/` 建立 `index.ts`，預設匯出一個實作 `FeatureModule` 介面的物件（`id`／`title`／`mount(container)`）。
 2. 在 `src/modules/registry.ts` 匯入並加進 `modules` 陣列。
-3. 分頁會自動出現，且不影響其他模組。
+3. 分頁會自動出現，不影響其他模組。
+4. 計算邏輯放在 `calculate.ts`，並在 `tests/<名稱>/` 補測試；需求寫進 `PROJECT_SPEC.md`。
 
-### 部署
+---
 
-純前端、無後端與環境變數，使用 **GitHub Pages** 自動部署（`.github/workflows/deploy.yml`）：
+## 部署
+
+使用 **GitHub Pages**，由 `.github/workflows/deploy.yml` 自動部署：
 
 - `main` 分支一有新 commit，GitHub Actions 會自動「安裝套件 → 跑測試 → 打包 → 發布」。
 - 測試或打包失敗就不會發布，線上維持上一版。
-- 也可到 GitHub 的 Actions 分頁手動按「Run workflow」重新部署。
-- 第一次使用前：repo 的 Settings → Pages → Source 選「GitHub Actions」。
+- 也可以到 GitHub 的 **Actions** 分頁手動按「Run workflow」重新部署。
+- Repo 設定：Settings → Pages → Source 選「GitHub Actions」（已設定）。
 
-網址格式：`https://<帳號>.github.io/<repo>/`。
-`vite.config.ts` 已設 `base: './'`，子路徑部署也能正常運作；`dist/` 也可手動上傳到任何靜態主機。
+`vite.config.ts` 設定了 `base: './'`，在 `/bqpos-pro/` 這種子路徑下也能正常載入；`dist/` 也可以手動上傳到任何靜態主機。
 
-### 測試涵蓋
+---
 
-輸入正規化（空白／負數／小數視為無效）、目標數量正確、低於／等於／高於目標的換錢與多出計算，以及只列出不足幣值的合計。
+## 文件與 AI 協作
 
-## 核心原則
-
-```text
-POS 機採軟規則，只維持找錢安全；預備金採硬規則，POS 補完後必須回到固定標準；外部換錢只補最終真正不足的部分。
-```
+| 檔案 | 用途 |
+|---|---|
+| `PROJECT_SPEC.md` | **唯一需求來源**，其他文件與它衝突時一律以它為準 |
+| `CLAUDE.md` | Claude Code 操作規則（只放規則，不重複規格） |
+| `AGENTS.md` | Codex 操作規則（同上） |
+| `docs/WORKFLOW.md` | Claude Code 與 Codex 的交接流程 |
+| `scripts/sync-agent-docs.mjs` | 把規格的版本雜湊同步到 `CLAUDE.md`／`AGENTS.md`（`npm run sync:agents`） |
