@@ -8,6 +8,7 @@ import {
   deptToCanonical,
   companyToCanonical,
   syncDeptToCompany,
+  orderDeptFieldKeys,
   calculateAdjustments,
   normalizeProductPieces,
   orderCompanyFieldKeys,
@@ -272,4 +273,49 @@ test('欄位窮舉：每個宣告欄位最多只計入一個配對軸（逐欄�
     expect(explicit).toBeLessThanOrEqual(1);
     expect(c['未配對項目']).toBe(1 - explicit);
   });
+});
+
+test('新版百貨POS：信用卡拆中信＋聯合，加總（連同離線）進公司信用卡與對帳「信用卡」軸', () => {
+  const dept = toNumbers({ credit_card_citi: 12434, credit_card_union: 600, credit_card_offline: 30 });
+  expect(syncDeptToCompany(dept).credit).toBe(13064);
+  expect(deptToCanonical(dept)['信用卡']).toBe(13064);
+  expect(deptToCanonical(dept)['未配對項目']).toBe(0); // 沒有被當成未配對漏掉
+});
+
+test('新版百貨POS 2026-10 實拍數字：各款別加總＝銷售總金額 47,115，同步後公司欄位正確', () => {
+  const dept = toNumbers({
+    credit_card_citi: 12434,
+    credit_card_union: 0,
+    cash: 20069,
+    linepay_electronic: 7014,
+    ubereats_pending: 2217,
+    linepay: 2210,
+    easycard_card: 1651,
+    foodpanda_pending: 553,
+    gmpay_citi: 499,
+    jkopay: 280,
+    pi_wallet: 95,
+    imall_discount: 93,
+  });
+  const paid = Object.values(dept).reduce((a, b) => a + b, 0);
+  expect(paid).toBe(47115);
+  const synced = syncDeptToCompany(dept);
+  expect(synced.credit).toBe(12434);
+  expect(synced.linepay).toBe(9224); // LINEPay 2210 + LINE PAY(電支) 7014
+  expect(synced.gmpay).toBe(499);
+  expect(synced.foodpanda).toBe(553);
+  expect(synced.ubereats).toBe(2217);
+  expect(synced.global_points_offset).toBe(93);
+});
+
+test('orderDeptFieldKeys：有金額的排最前、剛加入還沒填的在後，未加入且沒金額的不顯示', () => {
+  const fields = ['cash', 'credit_card_citi', 'linepay', 'jkopay', 'pi_wallet'];
+  // 使用者先加了 linepay、jkopay；cash 是 OCR 帶入（有金額但沒按過加入）。
+  const order = orderDeptFieldKeys(fields, { cash: 100, jkopay: 280, linepay: '' }, ['linepay', 'jkopay']);
+  expect(order).toEqual(['jkopay', 'cash', 'linepay']);
+});
+
+test('orderDeptFieldKeys：忽略無效 key 與重複，金額 0 視為沒填', () => {
+  const order = orderDeptFieldKeys(['cash', 'jkopay'], { cash: 0, jkopay: 5 }, ['nope', 'cash', 'cash']);
+  expect(order).toEqual(['jkopay', 'cash']);
 });

@@ -2,7 +2,7 @@
 // 計算規則都在 calculate.ts / ocr.ts，本檔只負責畫面、事件與 localStorage。
 // 結構移植自原始 index.html（reference/dual-pos-original），改為殼層可掛載／卸載的模組。
 
-import { PAYMENT_GROUPS, METHODS, OPTIONAL_PIECES } from './data';
+import { PAYMENT_GROUPS, METHODS, OPTIONAL_PIECES, DEPT_QUICK_KEYS } from './data';
 import {
   calculateAdjustments,
   deptToCanonical,
@@ -11,9 +11,9 @@ import {
   syncDeptToCompany,
   toNumbers,
   orderCompanyFieldKeys,
+  orderDeptFieldKeys,
 } from './calculate';
 import { recognizeAndParse, ocrConfig, type MergedResult } from './ocr';
-import { paginate } from './pagination';
 import { saveDeptSnapshot } from '../../core/dept-snapshot';
 import { saveCompanySnapshot } from '../../core/company-snapshot';
 import {
@@ -51,6 +51,9 @@ interface State {
   ocrWarn: Set<string>; // 由「信心不足／多張不一致」的 OCR 帶入的百貨POS欄位，列旁顯示 ⚠️
   total: Record<PosKind, number | ''>; // 各POS的「總帳」（手動或 OCR 銷售總金額），用來核對付款合計
   companyPinnedKeys: Set<string>; // 最後一次同步有帶入的公司 POS 款別，清空金額後仍保持置頂
+  deptShown: string[]; // 百貨POS：使用者按款別加入的列（有金額的列另外會自動顯示）
+  deptMoreOpen: boolean; // 「其他款別」是否展開
+  deptSearch: string; // 「其他款別」的搜尋字
 }
 
 interface ReconcileMemory {
@@ -60,6 +63,7 @@ interface ReconcileMemory {
   customPiece: number | '';
   total: Record<PosKind, number | ''>;
   companyPinnedKeys: string[];
+  deptShown: string[];
 }
 
 const defaultEnabled = (): Record<number, boolean> => ({
@@ -95,6 +99,12 @@ function restoreCompanyPinnedKeys(raw: unknown, company: PosState): Set<string> 
       .filter(([, value]) => typeof value === 'number' && value > 0)
       .map(([key]) => key),
   );
+}
+
+function restoreDeptShown(raw: unknown): string[] {
+  const validKeys = new Set(PAYMENT_GROUPS.dept.map((field) => field.key));
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((key): key is string => typeof key === 'string' && validKeys.has(key));
 }
 
 const TEMPLATE = `
@@ -193,6 +203,9 @@ export function renderReconcile(container: HTMLElement): () => void {
     ocrWarn: new Set<string>(),
     total: { dept: deptTotal, company: '' },
     companyPinnedKeys: restoreCompanyPinnedKeys(memory?.companyPinnedKeys, restoredCompany),
+    deptShown: restoreDeptShown(memory?.deptShown),
+    deptMoreOpen: false,
+    deptSearch: '',
   };
 
   const q = <T extends HTMLElement = HTMLElement>(sel: string): T =>
@@ -222,6 +235,7 @@ export function renderReconcile(container: HTMLElement): () => void {
       customPiece: state.customPiece,
       total: state.total,
       companyPinnedKeys: [...state.companyPinnedKeys],
+      deptShown: state.deptShown,
     });
   }
 
@@ -300,6 +314,8 @@ export function renderReconcile(container: HTMLElement): () => void {
     state.ocrWarn.clear(); // 連同 ⚠️ 標記一起清掉
     state.total = { dept: '', company: '' }; // 清掉總帳
     state.companyPinnedKeys.clear();
+    state.deptShown = [];
+    state.deptSearch = '';
     ocrRun++; // 作廢任何進行中的辨識
     els.ocrReviewArea.innerHTML = ''; // 清掉辨識結果摘要
     clearDailyMemory(HISTORY_KEY);
@@ -377,18 +393,78 @@ export function renderReconcile(container: HTMLElement): () => void {
       return;
     }
 
-    // 百貨 POS 欄位較多，維持每頁 11 個付款方式的橫向分頁。
-    const pages = paginate(fields, 11);
-    const pagesHtml = pages.map((page, index) => `
-      <section class="payment-page" aria-label="第 ${index + 1} 頁，共 ${pages.length} 頁">
-        <div class="payment-page-number">第 ${index + 1} / ${pages.length} 頁</div>
-        <div class="payment-page-rows">${page.map(rowHtml).join('')}</div>
-      </section>`).join('');
+    // 百貨 POS：新版機器把有結帳的款別移到最前面，順序每天不同 → 不再翻頁找欄位，
+    // 改成「按款別加列」。有金額的列排最前，沒用到的款別不佔畫面。
+    const byKey = new Map(fields.map((field) => [field.key, field]));
+    const visibleKeys = orderDeptFieldKeys(
+      fields.map((field) => field.key),
+      state.dept,
+      state.deptShown,
+    );
+    const visible = new Set(visibleKeys);
+    const quickChips = DEPT_QUICK_KEYS.filter((key) => !visible.has(key) && byKey.has(key))
+      .map((key) => addChipHtml(byKey.get(key)!))
+      .join('');
+    const rowsHtml = visibleKeys.length
+      ? visibleKeys.map((key) => rowHtml(byKey.get(key)!)).join('')
+      : '<div class="rows-empty">還沒有輸入。照百貨 POS 畫面，按下方款別加入並填金額，或用上面的拍照辨識。</div>';
     els.inputRows.innerHTML = `
-      <div class="page-scroll-hint" aria-hidden="true">← 左右滑動換頁 →</div>
-      <div class="payment-pages" role="region" aria-label="百貨 POS 付款方式，共 ${pages.length} 頁" tabindex="0">
-        ${pagesHtml}
-      </div>`;
+      <section class="dept-payment-list" aria-label="百貨 POS 付款方式">
+        ${rowsHtml}
+      </section>
+      <section class="add-area" aria-label="加入款別">
+        <div class="add-title">加入款別</div>
+        <div class="chip-grid">${quickChips || '<span class="add-none">常用款別都已加入</span>'}</div>
+        <details class="add-more" data-out="deptMore"${state.deptMoreOpen ? ' open' : ''}>
+          <summary>其他款別</summary>
+          <input type="search" class="add-search" data-act="deptSearch" placeholder="輸入款別名稱搜尋，例如：禮券、悠遊付" value="${escapeHtml(state.deptSearch)}" aria-label="搜尋其他款別" />
+          <div class="chip-grid more-list" data-out="deptMoreList">${moreChipsHtml(visible)}</div>
+        </details>
+      </section>`;
+  }
+
+  function addChipHtml(f: { key: string; label: string }): string {
+    return `<button type="button" class="add-chip" data-act="addRow" data-key="${f.key}">＋ ${escapeHtml(f.label)}</button>`;
+  }
+
+  // 「其他款別」清單：非常用、非舊版、尚未加入的款別，依搜尋字過濾。
+  function moreChipsHtml(visible: Set<string>): string {
+    const quick = new Set(DEPT_QUICK_KEYS);
+    const needle = state.deptSearch.trim().toLowerCase();
+    const matches = PAYMENT_GROUPS.dept.filter(
+      (f) =>
+        !f.legacy &&
+        !quick.has(f.key) &&
+        !visible.has(f.key) &&
+        (needle === '' || f.label.toLowerCase().includes(needle)),
+    );
+    return matches.length
+      ? matches.map(addChipHtml).join('')
+      : '<span class="add-none">沒有符合的款別</span>';
+  }
+
+  function refreshMoreList(): void {
+    const list = els.inputRows.querySelector<HTMLElement>('[data-out="deptMoreList"]');
+    if (!list) return;
+    const visible = new Set(
+      orderDeptFieldKeys(
+        PAYMENT_GROUPS.dept.map((field) => field.key),
+        state.dept,
+        state.deptShown,
+      ),
+    );
+    list.innerHTML = moreChipsHtml(visible);
+  }
+
+  function addDeptRow(key: string): void {
+    if (!PAYMENT_GROUPS.dept.some((field) => field.key === key)) return;
+    if (!state.deptShown.includes(key)) state.deptShown.push(key);
+    saveMemory();
+    renderInputs();
+    // 新列直接跳進金額輸入；手機會立刻叫出數字鍵盤。
+    els.inputRows
+      .querySelector<HTMLInputElement>(`input[data-pos="dept"][data-key="${key}"]`)
+      ?.focus();
   }
 
   function reorderCompanyRows(): void {
@@ -764,6 +840,11 @@ export function renderReconcile(container: HTMLElement): () => void {
     (e) => {
       const t = e.target;
       if (!(t instanceof HTMLInputElement)) return;
+      if (t.dataset.act === 'deptSearch') {
+        state.deptSearch = t.value; // 只重畫款別清單，不重畫搜尋框，免得打斷輸入
+        refreshMoreList();
+        return;
+      }
       const pos = t.dataset.pos as PosKind | undefined;
       const key = t.dataset.key;
       if (pos && key) {
@@ -782,6 +863,16 @@ export function renderReconcile(container: HTMLElement): () => void {
       }
     },
     { signal },
+  );
+
+  // 「其他款別」展開／收合：toggle 事件不冒泡，用 capture 在穩定容器上接，重畫後仍維持展開狀態。
+  els.inputRows.addEventListener(
+    'toggle',
+    (e) => {
+      const t = e.target;
+      if (t instanceof HTMLDetailsElement && t.dataset.out === 'deptMore') state.deptMoreOpen = t.open;
+    },
+    { signal, capture: true },
   );
 
   // 品項開關（委派於 chips 容器）。
@@ -826,6 +917,10 @@ export function renderReconcile(container: HTMLElement): () => void {
       else if (act === 'compute') compute();
       else if (act === 'export') exportText();
       else if (act === 'ocrAdd') els.fileInput.click();
+      else if (act === 'addRow') {
+        const key = actEl?.dataset.key;
+        if (key) addDeptRow(key);
+      }
       else if (act === 'rowDel') {
         // 一鍵清掉這格（辨識錯誤時用）：就地清空，避免橫向分頁跳回第一頁。
         const pos = actEl?.dataset.pos as PosKind | undefined;
@@ -836,6 +931,14 @@ export function renderReconcile(container: HTMLElement): () => void {
           else saveCompanySnapshot(toNumbers(state.company));
           saveMemory();
           if (pos === 'dept') state.ocrWarn.delete(key); // ⚠️ 只屬於百貨POS
+          if (pos === 'dept') {
+            // 百貨POS：刪除＝整列拿掉（款別回到「加入款別」清單），不是留一個空格子。
+            state.deptShown = state.deptShown.filter((k) => k !== key);
+            saveMemory();
+            renderInputs();
+            renderDynamic();
+            return;
+          }
           const row = actEl.closest<HTMLElement>('.payment-row');
           const input = row?.querySelector<HTMLInputElement>('input[data-key]');
           if (input) input.value = '';

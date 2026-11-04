@@ -197,56 +197,14 @@
 .rc .rows {
   min-width: 0;
 }
-.rc .page-scroll-hint {
-  margin: 0 0 6px;
-  color: var(--ink-3);
-  font-size: 12px;
-  text-align: center;
-}
-.rc .payment-pages {
-  display: flex;
-  gap: 10px;
-  max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x mandatory;
-  scrollbar-color: var(--accent-line) var(--surface-2);
-  border-radius: 14px;
-}
-.rc .payment-pages:focus-visible {
-  outline: 3px solid var(--accent-soft);
-  outline-offset: 2px;
-}
-.rc .company-payment-list {
+.rc .company-payment-list,
+.rc .dept-payment-list {
   display: grid;
   gap: 7px;
   padding: 10px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 14px;
-}
-.rc .payment-page {
-  flex: 0 0 100%;
-  min-width: 0;
-  align-self: stretch;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  padding: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.rc .payment-page-number {
-  margin: 0 2px 8px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 600;
-  text-align: right;
-}
-.rc .payment-page-rows {
-  display: grid;
-  gap: 7px;
 }
 .rc .payment-row {
   display: grid;
@@ -302,11 +260,92 @@
 .rc .payment-row[data-filled='false'] .row-del {
   display: none;
 }
+/* 百貨POS：剛加入、還沒填的列也要能移除（移除＝款別回到「加入款別」清單）。 */
+.rc .dept-payment-list .payment-row[data-filled='false'] .row-del {
+  display: inline-block;
+}
 .rc .row-del:active {
   background: var(--pos-down-soft);
 }
 .rc .payment-label .warn {
   cursor: help;
+}
+
+.rc .rows-empty {
+  padding: 14px 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+.rc .add-area {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.rc .add-title {
+  margin: 0 2px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rc .chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rc .add-chip {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rc .add-chip:active {
+  background: var(--accent-soft);
+}
+.rc .add-none {
+  color: var(--muted);
+  font-size: 13px;
+}
+.rc .add-more {
+  margin-top: 12px;
+}
+.rc .add-more summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rc .add-search {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px; /* 16px 以上，iOS 才不會在聚焦時自動放大畫面 */
+}
+.rc .add-search:focus {
+  outline: 2px solid var(--accent-line);
+  border-color: var(--accent);
+}
+.rc .more-list {
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .rc .ocr-section {

@@ -51,7 +51,7 @@ describe('環球清帳：百貨POS金額 → 結帳單對應', () => {
     // foodpanda（外送熊貓未）較前、全支付較後（依 PAYMENT_GROUPS.dept 順序）
     const s = buildSettlement({ full_pay: 700, foodpanda_pending: 400 });
     expect(s.appended.map((r) => [r.label, r.amount])).toEqual([
-      ['外送熊貓未', 400],
+      ['外送熊貓未開', 400],
       ['全支付', 700],
     ]);
     expect(s.appended.every((r) => r.appended)).toBe(true);
@@ -59,7 +59,7 @@ describe('環球清帳：百貨POS金額 → 結帳單對應', () => {
 
   test('金額為 0 的無對應欄位不補列（只補有金額者）', () => {
     const s = buildSettlement({ full_pay: 0, ue_opened: 0, foodpanda_pending: 430 });
-    expect(s.appended.map((r) => r.label)).toEqual(['外送熊貓未']);
+    expect(s.appended.map((r) => r.label)).toEqual(['外送熊貓未開']);
     expect(s.appended.every((r) => r.amount > 0)).toBe(true);
   });
 

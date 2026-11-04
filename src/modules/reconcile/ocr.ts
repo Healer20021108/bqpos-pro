@@ -30,7 +30,7 @@ interface LabelEntry {
 
 // ── 欄位標籤字典 ────────────────────────────────────────────────────────────
 // 排序原則：較長／較精確的別名排在較短／較籠統的前面，避免被搶先比對。
-const LABEL_MAPS: Record<PosKind, LabelEntry[]> = {
+export const LABEL_MAPS: Record<PosKind, LabelEntry[]> = {
   // 百貨POS —— 已用真實照片核對過。
   dept: [
     // 銷售總金額不是付款方式，會被路由到「總帳」核對付款合計（見 view.ts handleOcrFiles）。
@@ -40,6 +40,8 @@ const LABEL_MAPS: Record<PosKind, LabelEntry[]> = {
     { key: 'cash', aliases: ['現金'] },
 
     { key: 'credit_card_offline', aliases: ['離線信用卡'] },
+    { key: 'credit_card_citi', aliases: ['連線信用卡(中信)', '連線信用卡(中'] },
+    { key: 'credit_card_union', aliases: ['連線信用卡(聯合)', '連線信用卡(聯'] },
     { key: 'credit_card', aliases: ['連線信用卡', '信用卡'] },
 
     { key: 'product_voucher', aliases: ['商品禮券'] },
@@ -332,9 +334,24 @@ function toHalfWidthDigit(ch: string): string {
   return ch;
 }
 
+// 拍螢幕常常拍歪：整張字列會斜斜的，右邊的金額比左邊的標籤高（或低）一截，
+// 光看 cy 會被分到不同列。這裡用每個字「上緣」的方向估出整張照片的傾斜角（取中位數，
+// 少數雜訊字不影響），再把座標轉正；角度小於 0.5° 視為沒歪，大於 20° 視為不可信，都不轉。
+const SKEW_MIN_RAD = (0.5 * Math.PI) / 180;
+const SKEW_MAX_RAD = (20 * Math.PI) / 180;
+
+export function estimateSkewAngle(angles: number[]): number {
+  if (!angles.length) return 0;
+  const sorted = [...angles].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const abs = Math.abs(median);
+  return abs < SKEW_MIN_RAD || abs > SKEW_MAX_RAD ? 0 : median;
+}
+
 // 把 Vision 巢狀結構攤平成字元陣列，拆到「每個字」這層，避免中文切詞顆粒度不一致。
 export function flattenToChars(annotation: FullTextAnnotation): CharInfo[] {
   const chars: CharInfo[] = [];
+  const angles: number[] = [];
   const pages = annotation.pages || [];
   pages.forEach((page) => {
     (page.blocks || []).forEach((block) => {
@@ -353,6 +370,7 @@ export function flattenToChars(annotation: FullTextAnnotation): CharInfo[] {
             const y3 = verts[3].y ?? 0;
             const cx = (x0 + x1 + x2 + x3) / 4;
             const cy = (y0 + y1 + y2 + y3) / 4;
+            if (x1 !== x0 || y1 !== y0) angles.push(Math.atan2(y1 - y0, x1 - x0));
             const height = Math.abs(y3 - y0) || Math.abs(y2 - y1) || 12;
             chars.push({
               ch: toHalfWidthDigit(symbol.text),
@@ -366,6 +384,16 @@ export function flattenToChars(annotation: FullTextAnnotation): CharInfo[] {
       });
     });
   });
+  const skew = estimateSkewAngle(angles);
+  if (skew !== 0) {
+    const cos = Math.cos(skew);
+    const sin = Math.sin(skew);
+    chars.forEach((c) => {
+      const { cx, cy } = c;
+      c.cx = cx * cos + cy * sin;
+      c.cy = -cx * sin + cy * cos;
+    });
+  }
   return chars;
 }
 
@@ -392,9 +420,14 @@ export function clusterIntoLines(chars: CharInfo[]): CharInfo[][] {
   return lines.map((line) => line.sort((a, b) => a.cx - b.cx)); // 列內左到右
 }
 
-// 正規化字串：忽略大小寫、空白、全/半形冒號與逗號。
+// 正規化字串：忽略大小寫、空白、全/半形冒號與逗號，全形括號視為半形（POS 螢幕拍照常辨成全形）。
 export function normalize(str: string): string {
-  return str.toLowerCase().replace(/[\s：:，,]/g, '').trim();
+  return str
+    .toLowerCase()
+    .replace(/（/g, '(')
+    .replace(/）/g, ')')
+    .replace(/[\s：:，,]/g, '')
+    .trim();
 }
 
 // 負號不算數字字元（避免「PX-Pay」被切斷）；負數在 pairChunks 另行救回。

@@ -16,7 +16,7 @@ export const SECTION_RIGHT_TITLE = '實收有價證券';
 // 左欄：實收款別（A7–A23）
 export const FORM_LEFT: FormItem[] = [
   { label: '現金', keys: ['cash'] },
-  { label: '連線信用卡', keys: ['credit_card'] },
+  { label: '連線信用卡', keys: ['credit_card', 'credit_card_citi', 'credit_card_union'] }, // 新 POS 中信＋聯合加總
   { label: '離線信用卡', keys: ['credit_card_offline'] },
   { label: '悠遊卡', keys: ['easycard_card'] },
   { label: '一卡通', keys: ['ipass_card'] },

@@ -16,6 +16,8 @@ export interface PaymentField {
    * UI 會收進「尚未配對」摺疊區，但欄位仍存在、仍可輸入／OCR 寫入。
    */
   active?: boolean;
+  /** 舊版 POS 才有的欄位：不再出現在「加款別」清單，但已存在的金額仍照常顯示與計算。 */
+  legacy?: boolean;
 }
 
 /** POS 各欄位目前的輸入狀態：數字或空字串（空＝尚未輸入）。 */

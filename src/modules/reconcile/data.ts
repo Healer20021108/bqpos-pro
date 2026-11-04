@@ -11,7 +11,10 @@ export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
   // 所有欄位都可手動輸入或由 OCR 帶入（顯示規則見 view.ts renderInputs）。
   dept: [
     { key: 'cash', label: '現金', glyph: '金' },
-    { key: 'credit_card', label: '連線信用卡', glyph: '卡' },
+    // 新版百貨POS（2026-10 換機）把連線信用卡拆成中信／聯合兩欄；舊的單欄保留供當日舊資料相容。
+    { key: 'credit_card_citi', label: '連線信用卡(中信)', glyph: '卡' },
+    { key: 'credit_card_union', label: '連線信用卡(聯合)', glyph: '卡' },
+    { key: 'credit_card', label: '連線信用卡', glyph: '卡', active: false, legacy: true },
     { key: 'credit_card_offline', label: '離線信用卡', glyph: '卡' },
     { key: 'product_voucher', label: '商品禮券', glyph: '禮' },
     { key: 'receivable_amount', label: '應收帳款', glyph: '收', active: false },
@@ -58,7 +61,7 @@ export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
     { key: 'stimulus_voucher_substitute', label: '振興代用券', glyph: '券', active: false },
     { key: 'sports_voucher', label: '動滋券', glyph: '券', active: false },
     { key: 'jingcheng_discount', label: '精誠電子抵', glyph: '折' },
-    { key: 'foodpanda_pending', label: '外送熊貓未', glyph: '外' },
+    { key: 'foodpanda_pending', label: '外送熊貓未開', glyph: '外' },
     { key: 'e_cash_voucher', label: '電子現金券', glyph: '禮', active: false },
     { key: 'e_gift_voucher', label: '電子禮物券', glyph: '禮', active: false },
     { key: 'ipass_card', label: '一卡通', glyph: '卡', active: false },
@@ -82,7 +85,7 @@ export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
     { key: 'icash_pay', label: 'iCashPay', glyph: '付', active: false },
     { key: 'gmpay_citi', label: 'GMPAY(中信)', glyph: '付' },
     { key: 'sui_mai_qing_song', label: '隨買輕鬆取', glyph: '付', active: false },
-    { key: 'linepay_electronic', label: 'LINE PAY(電', glyph: '付' },
+    { key: 'linepay_electronic', label: 'LINE PAY(電支)', glyph: '付' },
     { key: 'receivable_3', label: '應收三(補登', glyph: '收', active: false },
     { key: 'ipass_money_app', label: 'iPass Money', glyph: '卡', active: false }, // 與「一卡通MONEY」為畫面上兩個不同位置，先各自獨立記錄
     { key: 'oupay', label: '歐付寶', glyph: '付', active: false },
@@ -118,6 +121,24 @@ export const PAYMENT_GROUPS: Record<PosKind, PaymentField[]> = {
     { key: 'add_purchase', label: '加價購', glyph: '購', active: false }, // 無單獨配對，金額併入「未配對項目」一起比對
   ],
 };
+
+// 百貨POS輸入畫面的「常用款別」快速按鈕（順序即顯示順序）。
+// 新版 POS 會把有結帳的款別移到清單最前面，順序每天不同，所以輸入改成「按款別加列」，
+// 其餘款別從「其他款別」搜尋加入。
+export const DEPT_QUICK_KEYS: string[] = [
+  'cash',
+  'credit_card_citi',
+  'credit_card_union',
+  'linepay',
+  'linepay_electronic',
+  'easycard_card',
+  'jkopay',
+  'gmpay_citi',
+  'foodpanda_pending',
+  'ubereats_pending',
+  'pi_wallet',
+  'imall_discount',
+];
 
 // 對帳比對的分類軸（canonical 分類）：每一項代表一條配對規則的比較軸，
 // 由 deptToCanonical／companyToCanonical 各自加總兩邊 POS 對應欄位後逐項相減。

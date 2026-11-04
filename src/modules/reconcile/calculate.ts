@@ -48,6 +48,28 @@ export function orderCompanyFieldKeys(
 }
 
 /**
+ * 百貨 POS 輸入列的顯示順序（新版 POS 把有結帳的款別移到最前面，這裡照辦）。
+ * 顯示的列＝使用者按款別加入的（shownKeys）＋已有金額的；
+ * 有金額的排最前（依加入順序，其餘依欄位表順序），剛加入還沒填的排在後面。
+ */
+export function orderDeptFieldKeys(
+  fieldKeys: readonly string[],
+  dept: Record<string, number | ''>,
+  shownKeys: readonly string[],
+): string[] {
+  const valid = new Set(fieldKeys);
+  const isFilled = (key: string): boolean => {
+    const value = dept[key];
+    return typeof value === 'number' && value > 0;
+  };
+  const shown = [...new Set(shownKeys)].filter((key) => valid.has(key));
+  const shownSet = new Set(shown);
+  const extra = fieldKeys.filter((key) => isFilled(key) && !shownSet.has(key));
+  const all = [...shown, ...extra];
+  return [...all.filter(isFilled), ...all.filter((key) => !isFilled(key))];
+}
+
+/**
  * 用最少張數，從 amounts 裡湊出 target（完全背包 / DP）。
  * 湊不出來回傳 null；target 為 0 回傳 []。
  */
@@ -127,13 +149,19 @@ function sumUnpaired(
   return total - paired;
 }
 
+// 公司「信用卡」＝百貨連線（中信＋聯合＋舊單欄）＋離線信用卡。
+function creditCardTotal(dept: PosNumbers): number {
+  const v = (k: string): number => dept[k] ?? 0;
+  return v('credit_card_citi') + v('credit_card_union') + v('credit_card') + v('credit_card_offline');
+}
+
 // 依配對規則：百貨POS多個欄位加總，對應到 canonical 分類。
 // 禮券家族（商品禮券＋現金禮券＋精誠電子抵）依方案A合併成單一「禮券類」比對軸。
 export function deptToCanonical(dept: PosNumbers): Record<string, number> {
   const v = (k: string): number => dept[k] ?? 0;
   const out: Record<string, number> = {
     '現金': v('cash'),
-    '信用卡': v('credit_card') + v('credit_card_offline'),
+    '信用卡': creditCardTotal(dept),
     '禮券類': v('product_voucher') + v('cash_voucher') + v('jingcheng_discount'),
     '街口支付': v('jkopay'),
     '街口折抵': v('jkopay_offset'),
@@ -308,7 +336,7 @@ export function syncDeptToCompany(dept: PosNumbers): PosNumbers {
   const result: PosNumbers = {
     cash: v('cash'),
     voucher: v('jingcheng_discount'),
-    credit: v('credit_card') + v('credit_card_offline'),
+    credit: creditCardTotal(dept),
     product_voucher: v('product_voucher') + v('cash_voucher'),
     linepay: v('linepay') + v('linepay_electronic'),
     pi_wallet: v('pi_wallet'),

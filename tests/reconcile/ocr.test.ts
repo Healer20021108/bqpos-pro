@@ -8,6 +8,9 @@ import {
   parseLines,
   clusterIntoLines,
   mergeParsedResults,
+  LABEL_MAPS,
+  flattenToChars,
+  estimateSkewAngle,
 } from '../../src/modules/reconcile/ocr';
 
 interface Ch {
@@ -120,4 +123,80 @@ test('parseLines：百貨 LinePay 連線(LINEPay)與電子(LINE PAY(電子))不�
   const { matched } = parseLines([mkLine('LINE PAY(電子)1200'), mkLine('LINEPay3000')], labelMap);
   expect(matched.linepay_electronic.value).toBe(1200); // 電子 → 電子
   expect(matched.linepay.value).toBe(3000); // 連線 → 連線（不會被電子搶走）
+});
+
+test('新版百貨POS螢幕：連線信用卡(中信)／(聯合)各自歸位，不互相覆蓋', () => {
+  const { matched } = parseLines(
+    [mkLine('連線信用卡(中信)12434'), mkLine('連線信用卡(聯合)3000')],
+    LABEL_MAPS.dept,
+  );
+  expect(matched.credit_card_citi.value).toBe(12434);
+  expect(matched.credit_card_union.value).toBe(3000);
+  expect(matched.credit_card).toBeUndefined();
+});
+
+test('新版百貨POS螢幕：全形括號也能辨識，且完整標籤（電支／熊貓未開）仍對得上', () => {
+  const { matched, unmatched } = parseLines(
+    [
+      mkLine('連線信用卡（中信）12434'),
+      mkLine('LINE PAY(電支)7014'),
+      mkLine('外送熊貓未開553'),
+      mkLine('外送UE未開2217'),
+      mkLine('GMPAY(中信)499'),
+      mkLine('PI拍錢包95'),
+      mkLine('Imall折抵93'),
+    ],
+    LABEL_MAPS.dept,
+  );
+  expect(unmatched).toEqual([]);
+  expect(matched.credit_card_citi.value).toBe(12434);
+  expect(matched.linepay_electronic.value).toBe(7014);
+  expect(matched.foodpanda_pending.value).toBe(553);
+  expect(matched.ubereats_pending.value).toBe(2217);
+  expect(matched.gmpay_citi.value).toBe(499);
+  expect(matched.pi_wallet.value).toBe(95);
+  expect(matched.imall_discount.value).toBe(93);
+});
+
+// 合成「拍歪的螢幕」：每個字給 Vision 風格的四頂點，整張照片順時針歪 deg 度。
+function tiltedAnnotation(rows: { text: string; y: number }[], deg: number) {
+  const rad = (deg * Math.PI) / 180;
+  const rot = (x: number, y: number) => ({ x: x * Math.cos(rad) - y * Math.sin(rad), y: x * Math.sin(rad) + y * Math.cos(rad) });
+  const symbols: { text: string; boundingBox: { vertices: { x: number; y: number }[] } }[] = [];
+  rows.forEach(({ text, y }) => {
+    // 標籤靠左、金額靠右（數字從 x=600 起），同一水平列。
+    const split = text.search(/\d/);
+    [...text].forEach((ch, i) => {
+      const x = i < split ? 100 + i * 30 : 600 + (i - split) * 20;
+      const h = 30;
+      symbols.push({
+        text: ch,
+        boundingBox: {
+          vertices: [rot(x, y), rot(x + 20, y), rot(x + 20, y + h), rot(x, y + h)],
+        },
+      });
+    });
+  });
+  return { pages: [{ blocks: [{ paragraphs: [{ words: symbols.map((s) => ({ symbols: [s] })) }] }] }] };
+}
+
+test('estimateSkewAngle：沒歪或角度離譜時不轉正', () => {
+  expect(estimateSkewAngle([])).toBe(0);
+  expect(estimateSkewAngle([0.001, 0.002, 0.001])).toBe(0); // < 0.5°
+  expect(estimateSkewAngle([1, 1, 1])).toBe(0); // 約 57°，不可信
+  expect(estimateSkewAngle([0.07, 0.07, 0.5])).toBeCloseTo(0.07); // 少數雜訊字不影響中位數
+});
+
+test('拍歪的螢幕（約 6°）：金額與同列標籤轉正後仍配對，不會被分到相鄰列', () => {
+  const rows = [
+    { text: 'PI拍錢包95', y: 100 },
+    { text: 'Imall折抵93', y: 190 },
+    { text: '悠遊卡1651', y: 280 },
+  ];
+  const annotation = tiltedAnnotation(rows, 6) as Parameters<typeof flattenToChars>[0];
+  const { matched, unmatched } = parseLines(clusterIntoLines(flattenToChars(annotation)), LABEL_MAPS.dept);
+  expect(unmatched).toEqual([]);
+  expect(matched.pi_wallet.value).toBe(95);
+  expect(matched.imall_discount.value).toBe(93);
+  expect(matched.easycard_card.value).toBe(1651);
 });
